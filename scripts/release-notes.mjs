@@ -11,7 +11,7 @@ if (given) {
   console.log(truncateNotes(given));
   process.exit(0);
 }
-const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
+const git = (...args) => execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 let range = 'HEAD';
 try {
   const prev = git('describe', '--tags', '--abbrev=0', '--match', 'v*', 'HEAD^');
