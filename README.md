@@ -83,12 +83,13 @@ npm run pack    # g2-assistant.ehpk 생성
 ## 배포 (GitHub Actions)
 
 - **CI** (`.github/workflows/ci.yml`): 모든 push/PR에서 버전·아이콘 검사, 타입 검사, 테스트, 빌드, `.ehpk` 패키징 후 아티팩트로 올립니다.
-- **Release to Even Hub** (`.github/workflows/release.yml`): 버전 태그를 push하면 자동으로 패키징 → Even Hub 업로드 → 베타 지정 →
-  GitHub Release에 `.ehpk` 첨부까지 합니다. Actions 탭에서 수동 실행(변경 내용 직접 입력)도 됩니다.
+- **Release to Even Hub** (`.github/workflows/release.yml`): 작업 브랜치(`claude/g2-ai-assistant-skkzlq`)에서 `app.json` 이 바뀌면
+  (= 버전을 올리면) 자동으로 패키징 → Even Hub 업로드 → 베타 지정까지 합니다. `v*` 태그 push나 Actions 탭 수동 실행도 됩니다.
+  별도 `main` 브랜치 없이 이 브랜치에서 바로 작업하고 배포합니다.
 
 ```bash
-npm version patch          # package.json + app.json 버전을 함께 올리고 커밋·태그 생성
-git push --follow-tags     # → 자동 배포
+npm version patch --no-git-tag-version   # package.json + app.json 버전을 함께 올림
+git commit -am "v$(node scripts/version.mjs get)" && git push   # → 자동 배포
 ```
 
 ### 처음 한 번만
@@ -99,9 +100,11 @@ git push --follow-tags     # → 자동 배포
    npm run pack
    npx evenhub create g2-assistant.ehpk --name "G2 Assistant" --tagline "픽셀 말티즈 AI 어시스턴트"
    ```
+   (휴대폰 Termux에서도 됩니다. `build`/`pack` 은 Termux에서 동작하도록 타입 검사를 분리해 두었습니다.)
 2. 로그인 정보를 저장소 시크릿으로 등록합니다.
    ```bash
-   pbcopy < ~/.config/evenhub/credentials.yaml
+   pbcopy < ~/.config/evenhub/credentials.yaml               # 맥
+   termux-clipboard-set < ~/.config/evenhub/credentials.yaml # Termux (Termux:API 필요), 또는 cat 으로 출력해 복사
    ```
    GitHub 저장소 → Settings → Secrets and variables → Actions → New repository secret 에서 이름을 `EVENHUB_CREDENTIALS` 로 하고 붙여넣습니다.
 3. Even Hub는 로그인을 갱신할 때마다 이전 토큰을 폐기하므로, 워크플로가 갱신된 로그인을 시크릿에 다시 저장합니다. GitHub → Settings(개인)

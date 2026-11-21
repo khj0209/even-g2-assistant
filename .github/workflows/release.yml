@@ -2,9 +2,10 @@ name: Release to Even Hub
 
 # Packs the app, uploads the version in app.json to Even Hub and points the beta channel at it.
 #
-# Runs automatically when a version tag is pushed:
-#     npm version patch && git push --follow-tags
-# or by hand from the Actions tab (Run workflow), e.g. to re-promote or to write the changelog yourself.
+# Runs automatically when app.json changes on the work branch (i.e. the version was bumped):
+#     npm version patch --no-git-tag-version && git commit -am "v0.1.1" && git push
+# or when a v* tag is pushed, or by hand from the Actions tab (Run workflow).
+# A push that doesn't change the version is a no-op: Even Hub already has it (upload exit 4).
 #
 # Needs two repository secrets:
 # - EVENHUB_CREDENTIALS: the contents of ~/.config/evenhub/credentials.yaml from a machine where
@@ -14,6 +15,8 @@ name: Release to Even Hub
 #   the old one, so the refreshed login has to be written back to EVENHUB_CREDENTIALS after each run.
 on:
   push:
+    branches: ['claude/g2-ai-assistant-skkzlq']
+    paths: ['app.json']
     tags: ['v*']
   workflow_dispatch:
     inputs:
