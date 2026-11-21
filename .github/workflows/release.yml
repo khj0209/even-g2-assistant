@@ -48,6 +48,7 @@ jobs:
       - name: Check versions
         run: node scripts/version.mjs check "${{ github.ref_type == 'tag' && github.ref_name || '' }}"
       - run: node scripts/check-icon.mjs store/icon.png
+      - run: npm run typecheck
       - run: npm test
       - run: npm run pack
 

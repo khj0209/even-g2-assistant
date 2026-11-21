@@ -6,7 +6,7 @@
   "description": "AI assistant (pixel Maltese + Claude) for Even Realities G2 glasses",
   "scripts": {
     "dev": "vite --host",
-    "build": "tsc --noEmit && vite build",
+    "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "qr": "evenhub qr --port 5173",

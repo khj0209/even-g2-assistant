@@ -73,8 +73,12 @@ npm run dev     # http://localhost:5173 — 일반 브라우저에서도 안경 
 npm run qr      # Even 앱으로 스캔해서 실제 안경에서 개발 버전 실행
 npm run sim     # Even Hub 시뮬레이터
 npm test        # 단위 테스트
+npm run typecheck  # 타입 검사 (CI에서도 실행)
 npm run pack    # g2-assistant.ehpk 생성
 ```
+
+`build`/`pack` 은 타입 검사 없이 Vite로만 빌드합니다. TypeScript 7은 네이티브 컴파일러라 Android(Termux)용 실행 파일이 없어서,
+휴대폰 Termux에서도 `npm run pack` 이 되도록 타입 검사는 `npm run typecheck`(그리고 CI)로 분리했습니다.
 
 ## 배포 (GitHub Actions)
 
