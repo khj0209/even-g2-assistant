@@ -92,6 +92,12 @@ npm version patch --no-git-tag-version   # package.json + app.json 버전을 함
 git commit -am "v$(node scripts/version.mjs get)" && git push   # → 자동 배포
 ```
 
+### 베타 테스터
+
+Actions 탭 → **Even Hub beta testers** → Run workflow 에서 `add` / `rm` / `list` 와 이메일(쉼표로 구분)을 넣고 실행합니다.
+Even Hub 로그인은 시크릿에만 두고 쓰기 때문에, 휴대폰이나 맥에서 CLI로 직접 추가하지 않는 편이 안전합니다(로그인 갱신 시 시크릿의 로그인이 폐기될 수 있음).
+공개 저장소라서 로그의 이메일은 가려집니다.
+
 ### 처음 한 번만
 
 1. 맥에서 Even Hub 로그인 후, 앱을 Even Hub에 처음 등록합니다.
