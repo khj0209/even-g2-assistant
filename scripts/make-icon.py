@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Draws store/icon.png: a Maltese face on a 12x12 grid scaled 2x, #F4F4F4 on transparent (Even Hub icon rules)."""
+"""Draws store/icon.png: a baby bear face with triangle ears on a 12x12 grid scaled 2x, #F4F4F4 on transparent (Even Hub icon rules)."""
 from pathlib import Path
 from PIL import Image
 
 ART = [
-    "...x....x...",
-    "....xxxx....",
-    "...x.xx.x...",
-    "x.xxxxxxxx.x",
-    "x.xx.xx.xx.x",
-    "x.xxxxxxxx.x",
-    "x.xxx..xxx.x",
-    "x.xxxxxxxx.x",
-    "xx.xxxxxx.xx",
-    "xx..xxxx..xx",
+    "............",
     ".x........x.",
+    ".xx......xx.",
+    ".xxxxxxxxxx.",
+    "xxxxxxxxxxxx",
+    "xxx.xxxx.xxx",
+    "xxxxxxxxxxxx",
+    "xxxxx..xxxxx",
+    "xxxx.xx.xxxx",
+    ".xxxxxxxxxx.",
+    "..xxxxxxxx..",
     "............",
 ]
 

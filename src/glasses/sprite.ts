@@ -1,35 +1,38 @@
 import type { Mood } from '../core/types';
 
-// A 24×24 pixel Maltese: white fur, floppy grey ears, a bow on the topknot.
-// Pixels: '.' off, 'o' outline, 'w' fur, 'e' ears, 'p' bow, 'k' eyes/nose/mouth (off),
-// 't' tongue, 's' effects (sound waves, "?", "!", heart).
+// A 24×24 pixel baby bear with triangle ears, a light muzzle and belly, and a chubby body.
+// Pixels: '.' off, 'o' outline, 'f' fur, 'm' muzzle/belly, 'i' inner ear, 'b' cheek,
+// 'k' eyes/nose/mouth (off), 't' tongue, 's' effects (sound waves, "?", "!", heart).
+// The art is drawn as the left half and mirrored, so the bear is always symmetric.
 // Eyes, mouth and effects are stamped on by `spriteGrid`, so the base has none.
-const BASE = [
-  '........................',
-  '........pp....pp........',
-  '........pppppppp........',
-  '........pp.ww.pp........',
-  '..........wwww..........',
-  '.......owwwwwwwwo.......',
-  '......owwwwwwwwwwo......',
-  '....eeowwwwwwwwwwoee....',
-  '...eeeowwwwwwwwwwoeee...',
-  '...eeeowwwwwwwwwwoeee...',
-  '..eeeeowwwwwwwwwwoeeee..',
-  '..eeeeowwwwkkwwwwoeeee..',
-  '..eeee.owwwwwwwwo.eeee..',
-  '..eeee..owwwwwwo..eeee..',
-  '..eee.oowwwwwwwwoo.eee..',
-  '..ee.owwwwwwwwwwwwo.ee..',
-  '...e.owwwwwwwwwwwwo.e...',
-  '.....owwwwwwwwwwwwo.....',
-  '....owwwwwwwwwwwwwwo....',
-  '....owwwwwwwwwwwwwwo....',
-  '....owwwwwowwowwwwwo....',
-  '....owwwwwowwowwwwwo....',
-  '.....oooooo..oooooo.....',
-  '........................',
+const LEFT_HALF = [
+  '............',
+  '....o.......',
+  '...oio......',
+  '...oiio.....',
+  '..oiiiiooooo',
+  '..oiiiffffff',
+  '...offffffff',
+  '..offfffffff',
+  '.offfffffff' + 'f',
+  '.offfffffff' + 'f',
+  '.offfffffff' + 'f',
+  '.offbffmmmkk',
+  '.offbfmmmmmk',
+  '..offfmmmmmm',
+  '..offffmmmmm',
+  '...offfffff' + 'f',
+  '....oooffff' + 'f',
+  '...offffmmmm',
+  '..offffmmmmm',
+  '.offoffmmmmm',
+  '.offoffmmmmm',
+  '..ooofffmmmm',
+  '..offfoooooo',
+  '...ooo......',
 ];
+
+const BASE = LEFT_HALF.map((half) => half + [...half].reverse().join(''));
 
 export const SPRITE_SIZE = 24;
 
@@ -37,16 +40,17 @@ export const SPRITE_SIZE = 24;
 export const PALETTE: Record<string, number> = {
   '.': 0,
   o: 110,
-  w: 245,
-  e: 185,
-  p: 150,
+  f: 185,
+  m: 250,
+  i: 135,
+  b: 150,
   k: 0,
   t: 120,
   s: 255,
 };
 
-const EYES_L = 9;
-const EYES_R = 13;
+const EYES_L = 7;
+const EYES_R = 15;
 
 type Grid = string[][];
 
@@ -68,8 +72,8 @@ function eyes(g: Grid, kind: 'open' | 'closed' | 'up'): void {
 
 function mouth(g: Grid, open: boolean): void {
   // Closed: a small "ω" under the nose. Open: a dark mouth with a tongue.
-  if (open) stamp(g, 10, 12, ['kkkk', ' tt ']);
-  else stamp(g, 10, 12, ['k  k']);
+  if (open) stamp(g, 10, 13, ['kkkk', ' tt ']);
+  else stamp(g, 10, 13, ['k  k']);
 }
 
 const QUESTION = ['sss', '  s', ' s ', '   ', ' s '];
@@ -91,14 +95,14 @@ export function spriteGrid(mood: Mood, frame = 0): string[] {
     case 'listening':
       eyes(g, 'open');
       mouth(g, false);
-      // Sound waves next to the right ear, growing with the frame.
-      stamp(g, 19, 1, ['s ', ' s', ' s', 's ']);
-      if (frame % 2 === 1) stamp(g, 21, 0, ['s ', ' s', ' s', ' s', ' s', 's ']);
+      // Sound waves beside the right ear, growing with the frame.
+      stamp(g, 21, 0, ['s ', ' s', ' s', 's ']);
+      if (frame % 2 === 1) stamp(g, 23, 0, ['s', 's', 's', 's']);
       break;
     case 'thinking':
       eyes(g, 'up');
       mouth(g, false);
-      stamp(g, 19, 0, QUESTION);
+      stamp(g, 21, 0, QUESTION);
       break;
     case 'talking':
       eyes(g, 'open');
@@ -107,12 +111,12 @@ export function spriteGrid(mood: Mood, frame = 0): string[] {
     case 'happy':
       eyes(g, 'closed');
       mouth(g, true);
-      stamp(g, 19, 1, HEART);
+      stamp(g, 21, 0, HEART);
       break;
     case 'error':
       eyes(g, 'closed');
       mouth(g, false);
-      stamp(g, 20, 0, BANG);
+      stamp(g, 22, 0, BANG);
       break;
   }
   return g.map((r) => r.join(''));

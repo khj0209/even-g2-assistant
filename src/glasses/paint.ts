@@ -2,7 +2,7 @@ import type { Mood } from '../core/types';
 import { PET } from './layout';
 import { PALETTE, petLabel, spriteGrid } from './sprite';
 
-/** Paints the Maltese and its label into a canvas the size of the pet container. */
+/** Paints the bear and its label into a canvas the size of the pet container. */
 export function paintPet(mood: Mood, frame: number, name: string): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = PET.w;

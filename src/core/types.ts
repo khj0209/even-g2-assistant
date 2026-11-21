@@ -10,7 +10,7 @@ export interface TempRange {
   max: number;
 }
 
-/** What the Maltese is doing; drives its sprite and label. */
+/** What the bear is doing; drives its sprite and label. */
 export type Mood = 'idle' | 'listening' | 'thinking' | 'talking' | 'happy' | 'error';
 
 export type SttMode = 'auto' | 'openai' | 'phone';

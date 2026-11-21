@@ -12,7 +12,7 @@ export interface Box {
   capture?: boolean;
 }
 
-/** The Maltese image: a 24×24 pixel sprite at 5× plus a one-line label below it. */
+/** The bear image: a 24×24 pixel sprite at 5× plus a one-line label below it. */
 export const PET = { w: 136, h: 144, scale: 5, spriteX: 8, labelY: 122 };
 
 /** Reply text area, and the estimated text width / line count that fits in it. */

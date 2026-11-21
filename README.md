@@ -1,6 +1,6 @@
 # G2 Assistant
 
-Even Realities G2 안경에서 쓰는 AI 어시스턴트입니다. 안경 왼쪽의 작은 픽셀 말티즈 **몽이**가 Claude의 답을 전해 줍니다.
+Even Realities G2 안경에서 쓰는 AI 어시스턴트입니다. 안경 왼쪽의 작은 픽셀 아기곰 **몽이**가 Claude의 답을 전해 줍니다.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -18,7 +18,7 @@ Even Realities G2 안경에서 쓰는 AI 어시스턴트입니다. 안경 왼쪽
 | | |
 | --- | --- |
 | 상단 상태 줄 | 안경 배터리 · 오늘 최저/최고 기온(Open-Meteo) · 현재 시각 · AI 토큰 잔여(월 예산 대비 %) |
-| 말티즈 캐릭터 | 24×24 픽셀 스프라이트. 대기(눈 깜빡임) · 듣는 중(소리 물결) · 생각 중(?) · 말하는 중(입 움직임) · 완료(하트) · 오류(!) |
+| 아기곰 캐릭터 | 삼각형 귀의 24×24 픽셀 스프라이트. 대기(눈 깜빡임) · 듣는 중(소리 물결) · 생각 중(?) · 말하는 중(입 움직임) · 완료(하트) · 오류(!) |
 | 음성 대화 | 안경 터치패드를 **길게 누른 채 말하고 손을 떼면** 답합니다 (push-to-talk) |
 | API 키 | 휴대폰 화면에서 직접 입력, 이 휴대폰에만 암호화 저장 |
 | 세션 선택 | 휴대폰에서 대화 세션(로컬) 또는 Claude 에이전트 세션(Managed Agents)을 골라 이어서 대화 |
@@ -104,7 +104,7 @@ Even Hub 로그인은 시크릿에만 두고 쓰기 때문에, 휴대폰이나 �
    ```bash
    npx evenhub login
    npm run pack
-   npx evenhub create g2-assistant.ehpk --name "G2 Assistant" --tagline "픽셀 말티즈 AI 어시스턴트"
+   npx evenhub create g2-assistant.ehpk --name "G2 Assistant" --tagline "픽셀 아기곰 AI 어시스턴트"
    ```
    (휴대폰 Termux에서도 됩니다. `build`/`pack` 은 Termux에서 동작하도록 타입 검사를 분리해 두었습니다.)
 2. 로그인 정보를 저장소 시크릿으로 등록합니다.
@@ -127,7 +127,7 @@ src/
   core/       표시 형식, 글자 줄바꿈·쪽 나누기, 토큰 사용량, PCM→WAV
   platform/   Even 앱 브리지, 저장소, 암호화 키 보관함
   services/   Claude(Messages API · Managed Agents 세션), 음성 인식, 날씨
-  glasses/    화면 배치, 말티즈 스프라이트, 렌더러(바뀐 것만 전송), 안경/휴대폰 미러 출력
+  glasses/    화면 배치, 아기곰 스프라이트, 렌더러(바뀐 것만 전송), 안경/휴대폰 미러 출력
   app.ts      전체 조율 (길게 누르기 → 음성 인식 → Claude → 몽이)
   main.ts     휴대폰 설정 화면
 scripts/      버전·아이콘 검사, 릴리스 노트, 아이콘 생성

@@ -33,7 +33,7 @@ describe('layout', () => {
   });
 });
 
-describe('maltese sprite', () => {
+describe('bear sprite', () => {
   it('is 24×24 with known pixel codes for every mood and frame', () => {
     for (const mood of MOODS) {
       for (let f = 0; f < 4; f++) {
