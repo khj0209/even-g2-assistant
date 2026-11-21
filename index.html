@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="referrer" content="no-referrer" />
+    <title>G2 Assistant</title>
+    <link rel="stylesheet" href="./src/ui/style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>G2 Assistant</h1>
+        <div class="pills">
+          <span id="pill-glasses" class="pill">안경</span>
+          <span id="pill-key" class="pill">API 키</span>
+        </div>
+      </header>
+
+      <canvas id="mirror" aria-label="안경 화면 미리보기"></canvas>
+      <div class="buttons">
+        <button id="ptt" type="button">누르고 말하기</button>
+        <button id="page-next" type="button">다음 쪽</button>
+        <button id="stop" type="button" class="danger">취소</button>
+      </div>
+      <p id="notice" class="message"></p>
+
+      <form id="ask-form" class="row-form">
+        <input id="ask-input" type="text" placeholder="글로 물어보기" autocomplete="off" enterkeyhint="send" />
+        <button type="submit">보내기</button>
+      </form>
+
+      <section>
+        <h2>세션</h2>
+        <p class="note">현재: <strong id="active-session"></strong></p>
+        <div class="buttons">
+          <button id="session-new" type="button">새 대화</button>
+          <button id="agent-load" type="button">Claude 에이전트 세션 불러오기</button>
+        </div>
+        <ul id="session-list" class="list"></ul>
+        <ul id="agent-list" class="list"></ul>
+        <p id="agent-message" class="message"></p>
+        <details>
+          <summary>현재 대화 기록</summary>
+          <ul id="transcript" class="transcript"></ul>
+        </details>
+      </section>
+
+      <section>
+        <h2>Claude API 키</h2>
+        <p class="note">현재: <strong id="key-state">확인 중…</strong></p>
+        <form id="key-form" class="row-form" autocomplete="off">
+          <input id="key-input" type="password" placeholder="sk-ant-…" autocomplete="off" autocapitalize="off" spellcheck="false" />
+          <button type="submit">확인 후 저장</button>
+        </form>
+        <div class="buttons">
+          <button id="key-delete" type="button" class="danger">키 삭제</button>
+        </div>
+        <p id="key-message" class="message"></p>
+        <p class="note">
+          키는 이 휴대폰에만 암호화되어 저장되고 api.anthropic.com 으로만 전송됩니다. 저장 후 입력칸은 비워지고 화면에는 앞뒤 일부만
+          보입니다. 가능하면 <a href="https://console.anthropic.com/settings/limits" target="_blank" rel="noopener">Console</a>에서
+          이 키 전용 워크스페이스에 월 사용 한도를 걸어 두세요.
+        </p>
+      </section>
+
+      <section>
+        <h2>음성 인식</h2>
+        <label>방식
+          <select id="stt-mode">
+            <option value="auto">자동 (OpenAI 키가 있으면 안경 마이크, 없으면 휴대폰 음성인식)</option>
+            <option value="openai">안경 마이크 + OpenAI 음성 인식</option>
+            <option value="phone">휴대폰 음성인식</option>
+          </select>
+        </label>
+        <p class="note">현재: <strong id="openai-state">확인 중…</strong></p>
+        <form id="openai-form" class="row-form" autocomplete="off">
+          <input id="openai-input" type="password" placeholder="OpenAI 키 (sk-…)" autocomplete="off" autocapitalize="off" spellcheck="false" />
+          <button type="submit">저장</button>
+        </form>
+        <div class="buttons">
+          <button id="openai-delete" type="button" class="danger">OpenAI 키 삭제</button>
+        </div>
+        <label>음성 인식 모델 <input id="stt-model" type="text" autocomplete="off" spellcheck="false" /></label>
+        <p class="note">
+          Claude API는 음성을 직접 받지 않아서, 안경 마이크 소리는 OpenAI 음성 인식으로 글자로 바꾼 뒤 Claude에게 보냅니다.
+          OpenAI 키가 없으면 휴대폰 자체 음성인식을 씁니다(휴대폰 마이크 사용, 기기에 따라 지원하지 않을 수 있음).
+        </p>
+      </section>
+
+      <section>
+        <h2>모델 · 토큰</h2>
+        <label>모델 <select id="model"></select></label>
+        <label>월 토큰 예산 <input id="budget" type="number" min="0" step="100000" inputmode="numeric" /></label>
+        <p class="note">안경 상단의 "AI n%"는 이번 달 예산 중 남은 비율입니다. 0으로 두면 사용한 토큰 수를 보여줍니다.</p>
+        <p id="usage" class="message"></p>
+        <div class="buttons">
+          <button id="usage-reset" type="button" class="danger">이번 달 사용량 초기화</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>사용법</h2>
+        <ul class="help">
+          <li>안경 터치패드를 <b>길게 누른 채</b> 말하고, 손을 떼면 몽이가 대답합니다.</li>
+          <li>답이 길면 <b>탭</b>하거나 위·아래로 <b>스크롤</b>해서 쪽을 넘깁니다.</li>
+          <li><b>두 번 탭</b>: 듣는 중이면 취소, 답하는 중이면 중단, 그 외에는 앱 종료.</li>
+        </ul>
+      </section>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

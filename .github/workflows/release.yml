@@ -1,0 +1,120 @@
+name: Release to Even Hub
+
+# Packs the app, uploads the version in app.json to Even Hub and points the beta channel at it.
+#
+# Runs automatically when a version tag is pushed:
+#     npm version patch && git push --follow-tags
+# or by hand from the Actions tab (Run workflow), e.g. to re-promote or to write the changelog yourself.
+#
+# Needs two repository secrets:
+# - EVENHUB_CREDENTIALS: the contents of ~/.config/evenhub/credentials.yaml from a machine where
+#   `evenhub login` was run (the CLI's login is interactive and cannot run here).
+# - EVENHUB_SECRET_WRITER: a fine-grained GitHub token for this repository with "Secrets: read and
+#   write". Even Hub rotates the refresh token whenever the CLI refreshes its login, which revokes
+#   the old one, so the refreshed login has to be written back to EVENHUB_CREDENTIALS after each run.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      changelog:
+        description: What changed (shown to testers, max 500 characters). Empty = commit subjects since the last tag.
+        required: false
+      promote:
+        description: Put this version on the beta channel
+        type: boolean
+        default: true
+
+concurrency: even-hub-release
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - name: Check versions
+        run: node scripts/version.mjs check "${{ github.ref_type == 'tag' && github.ref_name || '' }}"
+      - run: node scripts/check-icon.mjs store/icon.png
+      - run: npm test
+      - run: npm run pack
+
+      - name: Release notes
+        env:
+          CHANGELOG: ${{ inputs.changelog }}
+        run: |
+          node scripts/release-notes.mjs "$CHANGELOG" > "$RUNNER_TEMP/notes.txt"
+          cat "$RUNNER_TEMP/notes.txt"
+
+      - name: Restore Even Hub login
+        env:
+          EVENHUB_CREDENTIALS: ${{ secrets.EVENHUB_CREDENTIALS }}
+        run: |
+          if [ -z "$EVENHUB_CREDENTIALS" ]; then
+            echo "::error::Repository secret EVENHUB_CREDENTIALS is not set. See README (배포)."
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/xdg/evenhub"
+          printf '%s\n' "$EVENHUB_CREDENTIALS" > "$RUNNER_TEMP/xdg/evenhub/credentials.yaml"
+          chmod 600 "$RUNNER_TEMP/xdg/evenhub/credentials.yaml"
+          # $GITHUB_ENV only applies to later steps, so export it for the check below too.
+          export XDG_CONFIG_HOME="$RUNNER_TEMP/xdg"
+          echo "XDG_CONFIG_HOME=$XDG_CONFIG_HOME" >> "$GITHUB_ENV"
+          sha256sum "$XDG_CONFIG_HOME/evenhub/credentials.yaml" | cut -d' ' -f1 > "$RUNNER_TEMP/credentials.sha"
+          npx evenhub self-check
+
+      - name: Upload build
+        run: |
+          set +e
+          npx evenhub upload g2-assistant.ehpk -m "$(cat "$RUNNER_TEMP/notes.txt")"
+          code=$?
+          set -e
+          # Exit 4 = this version already exists on Even Hub; re-running to promote it is fine.
+          if [ "$code" = 4 ]; then echo "::notice::Version already uploaded, skipping upload."; elif [ "$code" != 0 ]; then exit "$code"; fi
+
+      - name: Promote to beta
+        if: ${{ github.event_name == 'push' || inputs.promote }}
+        run: |
+          version=$(node -p "require('./app.json').version")
+          npx evenhub promote "$version" --to beta
+          npx evenhub ls "$(node -p "require('./app.json').package_id")" --channels
+
+      - name: Attach package to a GitHub release
+        if: ${{ github.ref_type == 'tag' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.txt"
+          gh release upload "$GITHUB_REF_NAME" g2-assistant.ehpk --clobber
+
+      # Runs even when an earlier step failed: a refresh may already have revoked the stored login.
+      - name: Save refreshed login
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.EVENHUB_SECRET_WRITER }}
+        run: |
+          file="$RUNNER_TEMP/xdg/evenhub/credentials.yaml"
+          [ -f "$file" ] && [ -f "$RUNNER_TEMP/credentials.sha" ] || exit 0
+          if [ "$(sha256sum "$file" | cut -d' ' -f1)" = "$(cat "$RUNNER_TEMP/credentials.sha")" ]; then
+            echo "Login unchanged."
+            exit 0
+          fi
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::The Even Hub login was refreshed, but EVENHUB_SECRET_WRITER is not set, so it could not be saved. The stored login is now revoked: log in again and update EVENHUB_CREDENTIALS."
+            exit 1
+          fi
+          gh secret set EVENHUB_CREDENTIALS --repo "$GITHUB_REPOSITORY" < "$file"
+          echo "Saved the refreshed Even Hub login."
