@@ -64,6 +64,8 @@ export class Assistant {
   /** Current situation, and whether the Android companion app answered the last poll. */
   mode: ContextMode = 'assistant';
   companion = false;
+  /** Why the last poll failed, for the phone screen. */
+  companionError = '';
 
   private frame = 0;
   private moodSince = Date.now();
@@ -141,8 +143,10 @@ export class Assistant {
 
   /** Follows the companion app (setting 'auto') or the mode fixed on the phone. */
   async refreshMode(): Promise<void> {
-    const ctx = await fetchContext();
+    const r = await fetchContext();
+    const ctx = 'error' in r ? null : r;
     this.companion = !!ctx;
+    this.companionError = 'error' in r ? r.error : '';
     const fixed = this.settings.mode;
     const next = fixed !== 'auto' ? fixed : (ctx?.mode ?? 'assistant');
     if (next === this.mode) return this.render();

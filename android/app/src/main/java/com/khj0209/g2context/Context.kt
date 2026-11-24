@@ -20,6 +20,9 @@ const val KEY_OVERRIDE = "override" // mode set by a Samsung routine shortcut or
 const val KEY_ACTIVITY = "activity" // mode implied by the current motion
 const val KEY_CURRENT = "current"
 const val KEY_SOURCE = "source"
+const val KEY_SERVER = "server" // local server state, for the diagnostics on the main screen
+const val KEY_SERVED = "served" // requests answered, and when the last one came
+const val KEY_SERVED_AT = "served_at"
 
 fun prefs(ctx: Context): SharedPreferences = ctx.getSharedPreferences("context", Context.MODE_PRIVATE)
 

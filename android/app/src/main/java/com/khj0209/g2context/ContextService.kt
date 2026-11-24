@@ -56,6 +56,7 @@ class ContextService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         handler.removeCallbacks(tick)
         prefs(this).unregisterOnSharedPreferenceChangeListener(this)
         server?.close()
+        prefs(this).edit().putString(KEY_SERVER, "꺼짐").apply()
         super.onDestroy()
     }
 
@@ -94,9 +95,11 @@ class ContextService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         val socket = try {
             ServerSocket(PORT, 8, InetAddress.getByName("127.0.0.1"))
         } catch (e: IOException) {
+            prefs(this).edit().putString(KEY_SERVER, "시작 실패: ${e.message}").apply()
             return
         }
         server = socket
+        prefs(this).edit().putString(KEY_SERVER, "실행 중 (127.0.0.1:$PORT)").apply()
         while (!socket.isClosed) {
             try {
                 socket.accept().use { respond(it) }
@@ -126,6 +129,8 @@ class ContextService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         out.write("${head}Connection: close\r\n\r\n".toByteArray())
         if (request.startsWith("GET /mode")) out.write(body)
         out.flush()
+        val p = prefs(this)
+        p.edit().putInt(KEY_SERVED, p.getInt(KEY_SERVED, 0) + 1).putLong(KEY_SERVED_AT, System.currentTimeMillis()).apply()
     }
 
     companion object {

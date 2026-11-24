@@ -67,7 +67,11 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
             append("지금: ${mode.label} 모드\n")
             append("이유: ${SOURCE_LABELS[p.getString(KEY_SOURCE, "default")]}\n")
             append("직접 지정: ${Mode.of(p.getString(KEY_OVERRIDE, null))?.label ?: "없음 (자동)"}\n")
-            append(if (missing.isEmpty()) "권한: 모두 허용됨" else "허용 필요: ${missing.joinToString()}")
+            append(if (missing.isEmpty()) "권한: 모두 허용됨\n" else "허용 필요: ${missing.joinToString()}\n")
+            val at = p.getLong(KEY_SERVED_AT, 0)
+            append("로컬 서버: ${p.getString(KEY_SERVER, "아직 시작 안 됨")}\n")
+            append("안경 앱 요청: ${p.getInt(KEY_SERVED, 0)}회")
+            if (at > 0) append(" (마지막 ${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.KOREA).format(at)})")
         }
     }
 

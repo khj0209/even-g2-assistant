@@ -225,7 +225,7 @@ async function main(): Promise<void> {
       g.className = `pill ${app.device.connected ? 'ok' : 'bad'}`;
     }
     ptt.classList.toggle('active', app.stage === 'listening');
-    $('companion-state').textContent = app.companion ? `연결됨 · 지금 ${MODES[app.mode].label}` : '연결 안 됨 (앱이 꺼져 있거나 설치되지 않음)';
+    $('companion-state').textContent = app.companion ? `연결됨 · 지금 ${MODES[app.mode].label}` : `연결 안 됨 — ${app.companionError}`;
     say($('notice'), app.notice, !!app.notice);
     const u = app.usage;
     $('usage').textContent =
