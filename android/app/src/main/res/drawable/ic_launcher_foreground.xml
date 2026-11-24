@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Dual lens": the G2's two lenses, a HUD text line on the left and an AI sparkle on the right. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#1A35F06A" android:strokeColor="#35F06A" android:strokeWidth="3.5"
+        android:pathData="M31,41H41A10,10 0,0 1,51 51V57A10,10 0,0 1,41 67H31A10,10 0,0 1,21 57V51A10,10 0,0 1,31 41Z
+        M67,41H77A10,10 0,0 1,87 51V57A10,10 0,0 1,77 67H67A10,10 0,0 1,57 57V51A10,10 0,0 1,67 41Z" />
+    <path android:strokeColor="#35F06A" android:strokeWidth="3.5" android:strokeLineCap="round"
+        android:pathData="M51,48Q54,43.5 57,48" />
+    <path android:strokeColor="#D935F06A" android:strokeWidth="2.6" android:strokeLineCap="round"
+        android:pathData="M28.5,50H43.5M28.5,57H38" />
+    <path android:pathData="M72,44.5Q73.14,52.86 81.5,54Q73.14,55.14 72,63.5Q70.86,55.14 62.5,54Q70.86,52.86 72,44.5Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="62.5" android:startY="44.5" android:endX="81.5" android:endY="63.5"
+                android:startColor="#D9FFE5" android:endColor="#35F06A" />
+        </aapt:attr>
+    </path>
+</vector>
