@@ -1,0 +1,82 @@
+name: Android (G2 Context)
+
+# Builds the G2 Context companion app, runs its unit tests and publishes the APK as the
+# "android-latest" pre-release (download it on the phone and install).
+#
+# Signing: the first run creates a keystore and stores it in the ANDROID_KEYSTORE_B64 /
+# ANDROID_KEYSTORE_PASSWORD secrets (using EVENHUB_SECRET_WRITER, which can write this repo's
+# secrets), so every later build is signed with the same key and installs over the previous one.
+on:
+  push:
+    branches: ['claude/g2-ai-assistant-skkzlq']
+    paths: ['android/**', '.github/workflows/android.yml']
+  workflow_dispatch:
+
+concurrency: android-release
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.14.3
+
+      - name: Signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          GH_TOKEN: ${{ secrets.EVENHUB_SECRET_WRITER }}
+        run: |
+          ks="$RUNNER_TEMP/release.jks"
+          if [ -n "$KEYSTORE_B64" ]; then
+            printf '%s' "$KEYSTORE_B64" | base64 -d > "$ks"
+            pass="$KEYSTORE_PASSWORD"
+          elif [ -n "$GH_TOKEN" ]; then
+            pass=$(openssl rand -hex 16)
+            echo "::add-mask::$pass"
+            keytool -genkeypair -keystore "$ks" -alias g2context -keyalg RSA -keysize 3072 -validity 20000 \
+              -storepass "$pass" -keypass "$pass" -dname "CN=G2 Context"
+            base64 -w0 "$ks" | gh secret set ANDROID_KEYSTORE_B64 --repo "$GITHUB_REPOSITORY"
+            gh secret set ANDROID_KEYSTORE_PASSWORD --repo "$GITHUB_REPOSITORY" --body "$pass"
+            echo "Created the signing key and saved it to repository secrets."
+          else
+            echo "::warning::No signing key and EVENHUB_SECRET_WRITER is not set: building with a throwaway debug key (updates won't install over each other)."
+            exit 0
+          fi
+          echo "::add-mask::$pass"
+          echo "KEYSTORE_FILE=$ks" >> "$GITHUB_ENV"
+          echo "KEYSTORE_PASSWORD=$pass" >> "$GITHUB_ENV"
+
+      - name: Test and build
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+        run: gradle -p android --no-daemon testDebugUnitTest assembleRelease
+
+      - run: cp android/app/build/outputs/apk/release/app-release.apk g2-context.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: g2-context-${{ github.sha }}
+          path: g2-context.apk
+          retention-days: 14
+
+      - name: Publish android-latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete android-latest --cleanup-tag -y 2>/dev/null || true
+          gh release create android-latest g2-context.apk --prerelease --target "$GITHUB_SHA" \
+            --title "G2 Context (Android) build ${{ github.run_number }}" \
+            --notes "휴대폰에서 g2-context.apk 를 내려받아 설치하세요. 커밋 ${GITHUB_SHA::7}."

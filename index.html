@@ -31,6 +31,19 @@
       </form>
 
       <section>
+        <h2>상황 모드</h2>
+        <label>모드
+          <select id="mode">
+            <option value="auto">자동 (G2 Context 안드로이드 앱이 감지)</option>
+          </select>
+        </label>
+        <p class="note">안드로이드 앱: <strong id="companion-state">확인 중…</strong></p>
+        <p class="note">
+          G2 Context 앱이 움직임(운전·러닝·자전거), 캘린더(회의), 삼성 루틴(장소·와이파이)으로 상황을 알아내면 몽이의 답변 방식이 바뀝니다.
+        </p>
+      </section>
+
+      <section>
         <h2>세션</h2>
         <p class="note">현재: <strong id="active-session"></strong></p>
         <div class="buttons">

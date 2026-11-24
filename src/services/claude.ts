@@ -41,13 +41,18 @@ export async function askClaude(
   history: ChatTurn[],
   onText: (delta: string) => void,
   signal?: AbortSignal,
+  /** Situation-specific instruction; kept after the cached prompt so the cache still hits. */
+  modeHint = '',
 ): Promise<AskResult> {
   const messages: Anthropic.Beta.BetaMessageParam[] = history.map((t) => ({ role: t.role, content: t.text }));
   const stream = client.beta.messages.stream(
     {
       model,
       max_tokens: 8000,
-      system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+      system: [
+        { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
+        ...(modeHint ? [{ type: 'text' as const, text: modeHint }] : []),
+      ],
       messages,
       // Short spoken answers: low effort keeps the wait on the glasses short.
       output_config: { effort: 'low' },

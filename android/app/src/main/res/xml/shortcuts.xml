@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shown in Samsung Modes & Routines under "앱 열기 또는 앱 작업", and on long-press of the app icon. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@android:drawable/ic_menu_compass"
+        android:shortcutId="mode_auto"
+        android:shortcutShortLabel="@string/mode_auto">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="g2context://mode/auto"
+            android:targetClass="com.khj0209.g2context.SetModeActivity"
+            android:targetPackage="com.khj0209.g2context" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@android:drawable/ic_menu_compass"
+        android:shortcutId="mode_assistant"
+        android:shortcutShortLabel="@string/mode_assistant">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="g2context://mode/assistant"
+            android:targetClass="com.khj0209.g2context.SetModeActivity"
+            android:targetPackage="com.khj0209.g2context" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@android:drawable/ic_menu_compass"
+        android:shortcutId="mode_running"
+        android:shortcutShortLabel="@string/mode_running">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="g2context://mode/running"
+            android:targetClass="com.khj0209.g2context.SetModeActivity"
+            android:targetPackage="com.khj0209.g2context" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@android:drawable/ic_menu_compass"
+        android:shortcutId="mode_workout"
+        android:shortcutShortLabel="@string/mode_workout">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="g2context://mode/workout"
+            android:targetClass="com.khj0209.g2context.SetModeActivity"
+            android:targetPackage="com.khj0209.g2context" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@android:drawable/ic_menu_compass"
+        android:shortcutId="mode_driving"
+        android:shortcutShortLabel="@string/mode_driving">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="g2context://mode/driving"
+            android:targetClass="com.khj0209.g2context.SetModeActivity"
+            android:targetPackage="com.khj0209.g2context" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@android:drawable/ic_menu_compass"
+        android:shortcutId="mode_dev"
+        android:shortcutShortLabel="@string/mode_dev">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="g2context://mode/dev"
+            android:targetClass="com.khj0209.g2context.SetModeActivity"
+            android:targetPackage="com.khj0209.g2context" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@android:drawable/ic_menu_compass"
+        android:shortcutId="mode_meeting"
+        android:shortcutShortLabel="@string/mode_meeting">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="g2context://mode/meeting"
+            android:targetClass="com.khj0209.g2context.SetModeActivity"
+            android:targetPackage="com.khj0209.g2context" />
+    </shortcut>
+</shortcuts>

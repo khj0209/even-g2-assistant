@@ -33,6 +33,8 @@ export function formatAiTokens(used: number, budget: number): string {
 }
 
 export interface StatusParts {
+  /** Short label of the current situation, e.g. "운전". */
+  mode: string;
   device: DeviceState;
   temp: TempRange | null;
   now: Date;
@@ -40,7 +42,7 @@ export interface StatusParts {
   budget: number;
 }
 
-/** The single top line on the glasses: battery · today's low/high · time · AI tokens left. */
+/** The single top line on the glasses: mode · battery · today's low/high · time · AI tokens left. */
 export function statusLine(p: StatusParts): string {
-  return [formatBattery(p.device), formatTemp(p.temp), formatClock(p.now), formatAiTokens(p.used, p.budget)].join('   ');
+  return [`[${p.mode}]`, formatBattery(p.device), formatTemp(p.temp), formatClock(p.now), formatAiTokens(p.used, p.budget)].join('  ');
 }

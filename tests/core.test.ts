@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatAiTokens, formatClock, formatTokens, statusLine } from '../src/core/format';
+import { parseContext } from '../src/core/modes';
 import { PcmBuffer, pcmLevel, pcmToWav } from '../src/core/pcm';
 import { replyPages } from '../src/core/reply';
 import { ellipsize, paginate, textWidth, wrapText } from '../src/core/textlayout';
@@ -78,15 +79,26 @@ describe('format', () => {
 
   it('builds the status line', () => {
     const line = statusLine({
+      mode: '운전',
       device: { connected: true, battery: 82, charging: false },
       temp: { min: 2.6, max: 11.2 },
       now: new Date(2026, 10, 21, 14, 7),
       used: 100_000,
       budget: 1_000_000,
     });
-    expect(line).toBe('안경 82%   3°/11°   14:07   AI 90%');
-    const unknown = statusLine({ device: { connected: false, battery: null, charging: false }, temp: null, now: new Date(2026, 0, 1, 0, 0), used: 0, budget: 0 });
-    expect(unknown).toBe('안경 --   --°/--°   00:00   AI 0');
+    expect(line).toBe('[운전]  안경 82%  3°/11°  14:07  AI 90%');
+    expect(textWidth(line)).toBeLessThanOrEqual(560);
+    const unknown = statusLine({ mode: '일상', device: { connected: false, battery: null, charging: false }, temp: null, now: new Date(2026, 0, 1, 0, 0), used: 0, budget: 0 });
+    expect(unknown).toBe('[일상]  안경 --  --°/--°  00:00  AI 0');
+  });
+});
+
+describe('modes', () => {
+  it('accepts only known modes from the companion app', () => {
+    expect(parseContext({ mode: 'driving', source: 'activity' })).toEqual({ mode: 'driving', source: 'activity' });
+    expect(parseContext({ mode: 'flying' })).toBeNull();
+    expect(parseContext(null)).toBeNull();
+    expect(parseContext({ mode: 'toString' })).toBeNull();
   });
 });
 

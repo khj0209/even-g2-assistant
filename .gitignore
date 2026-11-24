@@ -3,3 +3,7 @@ dist
 *.ehpk
 .env
 .env.*
+android/.gradle
+android/build
+android/app/build
+android/local.properties

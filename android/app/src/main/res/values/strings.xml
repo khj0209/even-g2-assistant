@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="mode_auto">G2 자동 모드</string>
+    <string name="mode_assistant">G2 일상 모드</string>
+    <string name="mode_running">G2 러닝 모드</string>
+    <string name="mode_workout">G2 운동 모드</string>
+    <string name="mode_driving">G2 운전 모드</string>
+    <string name="mode_dev">G2 개발 모드</string>
+    <string name="mode_meeting">G2 회의 모드</string>
+</resources>

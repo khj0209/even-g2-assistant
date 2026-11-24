@@ -8,6 +8,7 @@ import {
   type EvenHubEvent,
 } from '@evenrealities/even_hub_sdk';
 import { statusLine } from './core/format';
+import { MODES, type ContextMode } from './core/modes';
 import { replyPages } from './core/reply';
 import { DEFAULT_SETTINGS, type DeviceState, type Mood, type Settings, type TempRange } from './core/types';
 import { addUsage, emptyUsage, parseUsage, rollUsage, totalTokens, type UsageState } from './core/usage';
@@ -27,12 +28,14 @@ import {
   type Recognizer,
 } from './services/stt';
 import { DEFAULT_LOCATION, fetchTodayRange, type GeoPoint } from './services/weather';
+import { fetchContext } from './services/context';
 
 type Stage = 'idle' | 'listening' | 'transcribing' | 'answering';
 
 const TICK_MS = 450;
 const WEATHER_TTL = 30 * 60_000;
 const MAX_LISTEN_MS = 60_000;
+const CONTEXT_POLL_MS = 5000;
 /** The host may deliver one touch as both a text and a sys event: drop repeats this close together. */
 const DEDUPE_MS = 150;
 
@@ -58,6 +61,9 @@ export class Assistant {
   page = 0;
   /** Last error shown, for the phone screen. */
   notice = '';
+  /** Current situation, and whether the Android companion app answered the last poll. */
+  mode: ContextMode = 'assistant';
+  companion = false;
 
   private frame = 0;
   private moodSince = Date.now();
@@ -107,6 +113,8 @@ export class Assistant {
     setInterval(() => this.tick(), TICK_MS);
     void this.refreshWeather();
     setInterval(() => void this.refreshWeather(), WEATHER_TTL);
+    void this.refreshMode();
+    setInterval(() => void this.refreshMode(), CONTEXT_POLL_MS);
   }
 
   addSink(sink: Sink): void {
@@ -124,8 +132,24 @@ export class Assistant {
   async saveSettings(patch: Partial<Settings>): Promise<void> {
     this.settings = { ...this.settings, ...patch };
     await this.deps.kv.set('settings', JSON.stringify(this.settings));
+    if (patch.mode) void this.refreshMode();
     if (this.deps.bridge && patch.sttModel) {
       this.glassesMic = new GlassesMicRecognizer(this.deps.bridge, () => this.deps.secrets.get('openai'), this.settings.sttModel);
+    }
+    this.render();
+  }
+
+  /** Follows the companion app (setting 'auto') or the mode fixed on the phone. */
+  async refreshMode(): Promise<void> {
+    const ctx = await fetchContext();
+    this.companion = !!ctx;
+    const fixed = this.settings.mode;
+    const next = fixed !== 'auto' ? fixed : (ctx?.mode ?? 'assistant');
+    if (next === this.mode) return this.render();
+    this.mode = next;
+    if (this.stage === 'idle') {
+      this.setMood('happy');
+      this.resetReply(`${MODES[next].label} 모드로 바꿨어요.`);
     }
     this.render();
   }
@@ -323,7 +347,7 @@ export class Assistant {
         let s = this.sessions.current()!;
         s = appendTurn(s, { role: 'user', text: q });
         await this.sessions.update(s);
-        const r = await askClaude(client, this.settings.model, s.turns, onText, this.abort.signal);
+        const r = await askClaude(client, this.settings.model, s.turns, onText, this.abort.signal, MODES[this.mode].hint);
         this.usage = addUsage(this.usage, r.usage, new Date());
         void this.deps.kv.set('usage', JSON.stringify(this.usage));
         this.answer = r.refused ? '그 요청에는 답할 수 없어요.' : r.text || '(빈 응답)';
@@ -390,6 +414,7 @@ export class Assistant {
   render(): void {
     this.renderer.render({
       status: statusLine({
+        mode: MODES[this.mode].label,
         device: this.device,
         temp: this.temp,
         now: new Date(),

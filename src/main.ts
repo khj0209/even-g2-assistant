@@ -1,6 +1,7 @@
 import { OsEventTypeList } from '@evenrealities/even_hub_sdk';
 import { Assistant } from './app';
 import { formatTokens } from './core/format';
+import { MODES, type ContextMode } from './core/modes';
 import { MODELS, type SttMode } from './core/types';
 import { connectBridge } from './platform/bridge';
 import { looksLikeAnthropicKey, looksLikeOpenAIKey, maskKey, SecretStore } from './platform/secrets';
@@ -133,6 +134,12 @@ async function main(): Promise<void> {
   budget.onchange = () => void app.saveSettings({ monthlyBudget: Math.max(0, Math.floor(Number(budget.value) || 0)) });
   $('usage-reset').onclick = () => confirm('이번 달 토큰 사용량 기록을 초기화할까요?') && void app.resetUsage();
 
+  // ------------------------------------------------------------ situation mode
+  const modeSelect = $<HTMLSelectElement>('mode');
+  for (const [id, m] of Object.entries(MODES)) modeSelect.append(el('option', { value: id, textContent: `${m.label} (고정)` }));
+  modeSelect.value = app.settings.mode;
+  modeSelect.onchange = () => void app.saveSettings({ mode: modeSelect.value as ContextMode | 'auto' });
+
   // ------------------------------------------------------------ sessions
   let agents: AgentSessionInfo[] = [];
   $('session-new').onclick = async () => {
@@ -218,6 +225,7 @@ async function main(): Promise<void> {
       g.className = `pill ${app.device.connected ? 'ok' : 'bad'}`;
     }
     ptt.classList.toggle('active', app.stage === 'listening');
+    $('companion-state').textContent = app.companion ? `연결됨 · 지금 ${MODES[app.mode].label}` : '연결 안 됨 (앱이 꺼져 있거나 설치되지 않음)';
     say($('notice'), app.notice, !!app.notice);
     const u = app.usage;
     $('usage').textContent =
