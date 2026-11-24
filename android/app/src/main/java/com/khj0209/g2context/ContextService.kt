@@ -199,6 +199,7 @@ class ContextService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             currentMedia(this)?.let { json.put("media", it) }
             claudeKey(this)?.let { json.put("claudeKey", it) }
             if (stConnected(this)) json.put("smartthings", true)
+            MediaListener.latestClaudeNotice?.let { json.put("notice", it) }
             nextEvent(this)?.let { (title, start) -> json.put("next", JSONObject().put("title", title).put("start", start)) }
             health(this)?.let { json.put("health", it) }
         }

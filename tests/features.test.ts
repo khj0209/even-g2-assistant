@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { dashboard, emptyTrack, healthLine, heartLine, paceVersusTarget, splitNotice, type DashState } from '../src/core/dashboard';
-import { parseContext } from '../src/core/modes';
+import { noticeDue, parseContext } from '../src/core/modes';
 import { isParkingQuestion, parkingAnswer } from '../src/core/parking';
 import { finishedSessions } from '../src/services/sessions';
 
@@ -74,5 +74,25 @@ describe('Samsung Health', () => {
     expect(dashboard({ ...base, health: { steps: 100 } }, 0)).toEqual({ big: '', caption: '', detail: '걸음 100' });
     const d = dashboard({ ...base, mode: 'running', health: { hr: 150, hrAt: 0 } }, 60_000)!;
     expect(d.detail.split('\n')[1]).toBe('심박 150 (1분 전)');
+  });
+});
+
+describe('Claude Code notices', () => {
+  const n = { id: 'k|1', title: 'Claude Code', text: '작업이 끝났어요', at: 1_000 };
+
+  it('are parsed only when complete', () => {
+    expect(parseContext({ mode: 'dev', notice: n })?.notice).toEqual(n);
+    expect(parseContext({ mode: 'dev', notice: { id: 'x', at: 1 } })?.notice).toBeUndefined();
+    expect(parseContext({ mode: 'dev', notice: { title: 'x', at: 1 } })?.notice).toBeUndefined();
+  });
+
+  it('pop up only in 일상/개발, once, and while fresh', () => {
+    expect(noticeDue('dev', n, 0, 2_000)).toBe(true);
+    expect(noticeDue('assistant', n, 0, 2_000)).toBe(true);
+    expect(noticeDue('driving', n, 0, 2_000)).toBe(false);
+    expect(noticeDue('running', n, 0, 2_000)).toBe(false);
+    expect(noticeDue('dev', n, 1_000, 2_000)).toBe(false); // already shown
+    expect(noticeDue('dev', n, 0, 1_000 + 11 * 60_000)).toBe(false); // too old
+    expect(noticeDue('dev', undefined, 0, 2_000)).toBe(false);
   });
 });

@@ -54,6 +54,25 @@ export interface Context {
   health?: Health;
   /** SmartThings is signed in on G2 Context (paired requests only). */
   smartthings?: boolean;
+  /** The newest Claude app notification (a Claude Code task finished or needs approval); paired only. */
+  notice?: Notice;
+}
+
+export interface Notice {
+  id: string;
+  title: string;
+  text: string;
+  /** When it was posted (ms). */
+  at: number;
+}
+
+/** Modes where task notices may interrupt; elsewhere (driving, running, meetings…) they wait. */
+export const NOTICE_MODES = new Set<ContextMode>(['assistant', 'dev']);
+const NOTICE_MAX_AGE_MS = 10 * 60_000;
+
+/** Whether a notice should pop up now: in 일상/개발, newer than the last one shown, and still fresh. */
+export function noticeDue(mode: ContextMode, n: Notice | undefined, lastShownAt: number, now: number): n is Notice {
+  return !!n && NOTICE_MODES.has(mode) && n.at > lastShownAt && now - n.at <= NOTICE_MAX_AGE_MS;
 }
 
 /** Today's steps, last night's sleep (minutes) and the latest heart rate with its time (ms). */
@@ -78,6 +97,7 @@ export function parseContext(json: unknown): Context | null {
     next?: { title?: unknown; start?: unknown };
     health?: Record<string, unknown>;
     smartthings?: unknown;
+    notice?: Record<string, unknown>;
   } | null;
   if (!j || !isMode(j.mode)) return null;
   const m = j.media;
@@ -90,6 +110,9 @@ export function parseContext(json: unknown): Context | null {
     ...(typeof j.claudeKey === 'string' && looksLikeAnthropicKey(j.claudeKey) ? { claudeKey: j.claudeKey.trim() } : {}),
     ...(str(j.next?.title) && num(j.next?.start) != null ? { next: { title: str(j.next!.title)!, start: num(j.next!.start)! } } : {}),
     ...(j.smartthings === true ? { smartthings: true } : {}),
+    ...(str(j.notice?.id) && num(j.notice?.at) != null && (str(j.notice?.title) || str(j.notice?.text))
+      ? { notice: { id: str(j.notice!.id)!, title: str(j.notice!.title) ?? '', text: str(j.notice!.text) ?? '', at: num(j.notice!.at)! } }
+      : {}),
     ...(j.health && typeof j.health === 'object'
       ? { health: { steps: num(j.health.steps), sleepMin: num(j.health.sleepMin), hr: num(j.health.hr), hrAt: num(j.health.hrAt) } }
       : {}),

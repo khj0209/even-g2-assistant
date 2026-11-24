@@ -8,7 +8,7 @@ import {
   type EvenHubEvent,
 } from '@evenrealities/even_hub_sdk';
 import { mediaLine, statusLine } from './core/format';
-import { MODES, type ContextMode, type Health, type Media } from './core/modes';
+import { MODES, NOTICE_MODES, noticeDue, type ContextMode, type Health, type Media } from './core/modes';
 import { addFix, dashboard, emptyTrack, REST_MS, splitNotice, type Dash, type Track } from './core/dashboard';
 import { isParkingQuestion, parkingAnswer, type Parking } from './core/parking';
 import { replyPages } from './core/reply';
@@ -102,6 +102,8 @@ export class Assistant {
   private splitAt = Date.now();
   /** Where the car was left when the last drive ended. */
   parking: Parking | null = null;
+  /** The newest Claude app notice shown so far (ms); older ones, and those from before start, are skipped. */
+  private noticeShownAt = Date.now();
   /** Agent session statuses at the last look, to notice when one finishes. */
   private agentPrev: Map<string, string> | null = null;
   /** The Drive HUD has the glasses. */
@@ -237,6 +239,11 @@ export class Assistant {
     this.loadLyrics();
     // After the key handling above, which closes the popup when the key first arrives.
     this.remindUpcoming();
+    // Claude Code finished or needs approval (from the Claude app's notification). Waits until 일상/개발 and idle.
+    const n = ctx?.notice;
+    if (noticeDue(next, n, this.noticeShownAt, Date.now()) && this.notify(`Claude Code · ${[n.title, n.text].filter(Boolean).join(': ')}`)) {
+      this.noticeShownAt = n.at;
+    }
     if (next === this.mode) return this.render();
     if (this.mode === 'driving') void this.saveParking();
     this.mode = next;
@@ -347,7 +354,8 @@ export class Assistant {
     } catch {
       return; // no Managed Agents on this key, or offline
     }
-    const done = finishedSessions(this.agentPrev, list);
+    // Only in 일상/개발: elsewhere these would interrupt a run, a drive or a meeting.
+    const done = NOTICE_MODES.has(this.mode) ? finishedSessions(this.agentPrev, list) : [];
     this.agentPrev = new Map(list.map((s) => [s.id, s.status]));
     for (const id of done) {
       const s = list.find((x) => x.id === id)!;

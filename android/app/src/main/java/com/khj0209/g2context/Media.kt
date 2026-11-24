@@ -6,17 +6,38 @@ import android.media.MediaMetadata
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.SystemClock
+import android.app.Notification
 import android.service.notification.NotificationListenerService
+import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationManagerCompat
 import org.json.JSONObject
 import java.security.MessageDigest
 import java.security.SecureRandom
 
 /**
- * Exists only so the user can grant notification access, which is what Android requires before
- * an app may read other apps' media sessions (what's playing). It doesn't read notifications.
+ * Notification access is what Android requires before an app may read other apps' media sessions
+ * (what's playing). Of the notifications themselves, only the Claude app's are kept: they say when a
+ * Claude Code task has finished or needs an approval, which the glasses then show.
  */
-class MediaListener : NotificationListenerService()
+class MediaListener : NotificationListenerService() {
+    override fun onNotificationPosted(sbn: StatusBarNotification) {
+        if (sbn.packageName !in CLAUDE_APPS) return
+        val n = sbn.notification
+        // Progress ("working…") and group summaries aren't news; the individual notices are.
+        if (n.flags and (Notification.FLAG_ONGOING_EVENT or Notification.FLAG_GROUP_SUMMARY) != 0) return
+        val title = n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+        val text = (n.extras.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: n.extras.getCharSequence(Notification.EXTRA_TEXT))?.toString().orEmpty()
+        if (title.isBlank() && text.isBlank()) return
+        latestClaudeNotice = JSONObject().put("id", "${sbn.key}|${sbn.postTime}").put("title", title).put("text", text).put("at", sbn.postTime)
+    }
+
+    companion object {
+        private val CLAUDE_APPS = setOf("com.anthropic.claude")
+
+        /** The newest Claude app notification, for the paired glasses app. */
+        @Volatile var latestClaudeNotice: JSONObject? = null
+    }
+}
 
 fun mediaAccessGranted(ctx: Context) = ctx.packageName in NotificationManagerCompat.getEnabledListenerPackages(ctx)
 

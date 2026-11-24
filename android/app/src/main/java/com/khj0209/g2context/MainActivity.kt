@@ -72,7 +72,7 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
         batteryButton = button("배터리 최적화 제외 (삼성 기기 필수)", PRIMARY) {
             startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
         }
-        mediaButton = button("재생 정보 접근 허용 (알림 접근)", PRIMARY) {
+        mediaButton = button("알림 접근 허용 (재생 정보 · Claude Code 알림)", PRIMARY) {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         }
         healthButton = button("삼성헬스 연결 (Health Connect 권한)", PRIMARY) { requestPermissions(HEALTH_PERMISSIONS, 2) }
