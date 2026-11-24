@@ -173,3 +173,16 @@ export async function askAgent(
   }
   return { text: out.trim(), needsAction: false };
 }
+
+/** Ids of sessions that were running at the last look and are idle now. Nothing on the first look. */
+export function finishedSessions(prev: Map<string, string> | null, now: { id: string; status: string }[]): string[] {
+  if (!prev) return [];
+  return now.filter((s) => s.status === 'idle' && prev.get(s.id) === 'running').map((s) => s.id);
+}
+
+/** Whether an idle session stopped to wait for the user (a tool approval), rather than finishing. */
+export async function agentNeedsAction(client: Anthropic, sessionId: string): Promise<boolean> {
+  const page = await client.beta.sessions.events.list(sessionId, { order: 'desc', limit: 1, types: ['session.status_idle'] });
+  const last = page.data[0];
+  return last?.type === 'session.status_idle' && last.stop_reason.type === 'requires_action';
+}

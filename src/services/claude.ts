@@ -13,6 +13,7 @@ export const SYSTEM_PROMPT = `너는 ${PET_NAME}, Even Realities G2 스마트 �
 - 마크다운, 표, 코드 블록, 글머리 기호, 이모지를 쓰지 마. 안경 글꼴은 일반 글자만 보여줄 수 있어.
 - 숫자와 핵심을 먼저 말하고 군더더기 인사말은 생략해.
 - 음성 인식 결과라 오타나 잘못 들린 단어가 있을 수 있으니 문맥으로 이해해. 정말 알 수 없으면 짧게 되물어.
+- 경기 결과, 뉴스, 가격, 영업시간처럼 최신 정보가 필요한 질문은 웹 검색으로 확인하고 답해. 출처는 말하지 않아도 돼.
 - 가끔 아기곰다운 귀여운 말투를 살짝 섞어도 되지만 정보 전달이 우선이야.`;
 
 /** Models that accept the server-side refusal fallback (`fallbacks: "default"`). */
@@ -54,6 +55,16 @@ export async function askClaude(
         ...(modeHint ? [{ type: 'text' as const, text: modeHint }] : []),
       ],
       messages,
+      // Claude's built-in web search for recent facts (scores, news, prices). A few searches per answer at most.
+      // shortcut: a 'pause_turn' after a long search loop is shown as-is; resume it if that ever happens in practice.
+      tools: [
+        {
+          type: 'web_search_20260209',
+          name: 'web_search',
+          max_uses: 3,
+          user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' },
+        },
+      ],
       // Short spoken answers: low effort keeps the wait on the glasses short.
       output_config: { effort: 'low' },
       ...(FALLBACK_MODELS.has(model) ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),

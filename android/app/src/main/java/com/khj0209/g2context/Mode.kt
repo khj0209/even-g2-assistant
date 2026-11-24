@@ -15,11 +15,20 @@ enum class Mode(val id: String, val label: String) {
         /**
          * Picks the current mode. Driving wins over everything, a mode set by a Samsung routine or by
          * hand comes next, then running/cycling from motion, then a calendar meeting.
+         * Driving: the car's Bluetooth is connected, or vehicle motion is detected. With `carOnly`, motion
+         * alone isn't enough (a bus or taxi passenger), only the car's Bluetooth counts.
          */
-        fun resolve(override: Mode?, activity: Mode?, inMeeting: Boolean): Pair<Mode, String> = when {
-            activity == DRIVING -> DRIVING to "activity"
+        fun resolve(
+            override: Mode?,
+            activity: Mode?,
+            inMeeting: Boolean,
+            carConnected: Boolean = false,
+            carOnly: Boolean = false,
+        ): Pair<Mode, String> = when {
+            carConnected -> DRIVING to "car"
+            activity == DRIVING && !carOnly -> DRIVING to "activity"
             override != null -> override to "routine"
-            activity != null -> activity to "activity"
+            activity != null && activity != DRIVING -> activity to "activity"
             inMeeting -> MEETING to "calendar"
             else -> ASSISTANT to "default"
         }

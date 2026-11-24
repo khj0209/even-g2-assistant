@@ -11,7 +11,9 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.view.View
 import android.text.InputType
+import android.os.Build
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.GridLayout
 import android.widget.LinearLayout
@@ -33,6 +35,7 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
     private lateinit var mediaButton: Button
     private lateinit var diagnostics: TextView
     private lateinit var keyState: TextView
+    private lateinit var carState: TextView
     private val modeButtons = mutableMapOf<Mode?, Button>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -49,7 +52,7 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
 
         setupTitle = heading("설정이 필요해요")
         root.addView(setupTitle)
-        permissionButton = button("마이크 · 움직임 · 캘린더 · 알림 권한 허용") { requestPermissions(PERMISSIONS, 1) }
+        permissionButton = button("마이크 · 움직임 · 캘린더 · 알림 · 블루투스 권한 허용") { requestPermissions(PERMISSIONS, 1) }
         batteryButton = button("배터리 최적화 제외 (삼성 기기 필수)") {
             startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
         }
@@ -90,6 +93,16 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
             setTextIsSelectable(true)
         })
         root.addView(text("Even 앱 → G2 Assistant → 설정 → G2 Context 연결에 입력하면 재생 중인 음악·영상이 안경에 보여요.", 13f, dim = true))
+
+        root.addView(heading("차량 블루투스"))
+        carState = text("", 15f)
+        root.addView(carState)
+        root.addView(CheckBox(this).apply {
+            text = "차량 블루투스에 연결됐을 때만 운전으로 판단 (버스·택시 승객일 때 운전 모드가 켜지지 않게)"
+            isChecked = prefs(this@MainActivity).getBoolean(KEY_CAR_ONLY, false)
+            setOnCheckedChangeListener { _, on -> prefs(this@MainActivity).edit().putBoolean(KEY_CAR_ONLY, on).apply() }
+        })
+        root.addView(text("차 오디오·핸즈프리 블루투스에 연결되면 움직임과 상관없이 운전 모드가 됩니다.", 13f, dim = true))
 
         root.addView(heading("모드 직접 지정"))
         val grid = GridLayout(this).apply { columnCount = 3 }
@@ -142,6 +155,7 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
         val override = Mode.of(p.getString(KEY_OVERRIDE, null))
         modeView.text = "${mode.label} 모드"
         keyState.text = claudeKey(this)?.let { "등록됨 (${maskClaudeKey(it)})" } ?: "미등록 — 아래에 입력하세요"
+        carState.text = if (p.getBoolean(KEY_CAR, false)) "연결됨: ${p.getString(KEY_CAR_NAME, "차량")}" else "연결된 차량 없음"
         reasonView.text = SOURCE_LABELS[p.getString(KEY_SOURCE, "default")] ?: ""
 
         // Setup steps disappear once done.
@@ -183,12 +197,14 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
     }
 
     companion object {
-        private val PERMISSIONS = arrayOf(
+        private val PERMISSIONS = listOfNotNull(
             Manifest.permission.RECORD_AUDIO,
             Manifest.permission.ACTIVITY_RECOGNITION,
             Manifest.permission.READ_CALENDAR,
             Manifest.permission.POST_NOTIFICATIONS,
-        )
+            // Runtime-granted only from Android 12; asking for it earlier would never succeed.
+            if (Build.VERSION.SDK_INT >= 31) Manifest.permission.BLUETOOTH_CONNECT else null,
+        ).toTypedArray()
         private const val HELP = """
 자동 감지: 운전(차량 이동, 항상 우선) · 러닝(달리기) · 운동(자전거) · 회의(캘린더 '바쁨' 일정)
 

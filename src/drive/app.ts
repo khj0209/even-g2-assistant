@@ -130,8 +130,16 @@ export class App {
   private media = '';
 
   setMedia(text: string): void {
+    if (text === this.media) return;
     this.media = text;
+    // Redraw at once (lyrics are timed to the line), reusing the last view rather than running a tick.
+    if (this.running && this.lastView) {
+      this.lastView = { ...this.lastView, media: text };
+      this.renderer.render(this.lastView);
+    }
   }
+
+  private lastView: HudView | null = null;
 
   get driving(): boolean {
     return this.running;
@@ -557,6 +565,7 @@ export class App {
       settings: this.settings,
       now,
     });
+    this.lastView = view;
     this.renderer.render(view);
     const state: AppState = {
       view,

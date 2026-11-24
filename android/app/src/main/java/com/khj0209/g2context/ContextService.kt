@@ -88,13 +88,19 @@ class ContextService : Service(), SharedPreferences.OnSharedPreferenceChangeList
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onSharedPreferenceChanged(p: SharedPreferences?, key: String?) {
-        if (key == KEY_OVERRIDE || key == KEY_ACTIVITY) refresh()
+        if (key in setOf(KEY_OVERRIDE, KEY_ACTIVITY, KEY_CAR, KEY_CAR_ONLY)) refresh()
     }
 
     private fun compute(): Pair<Mode, String> {
         val p = prefs(this)
         meetingEndsAt = meetingEnd(this)
-        return Mode.resolve(Mode.of(p.getString(KEY_OVERRIDE, null)), Mode.of(p.getString(KEY_ACTIVITY, null)), meetingEndsAt != null)
+        return Mode.resolve(
+            Mode.of(p.getString(KEY_OVERRIDE, null)),
+            Mode.of(p.getString(KEY_ACTIVITY, null)),
+            meetingEndsAt != null,
+            carConnected = p.getBoolean(KEY_CAR, false),
+            carOnly = p.getBoolean(KEY_CAR_ONLY, false),
+        )
     }
 
     private fun refresh() {
@@ -184,6 +190,7 @@ class ContextService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         if (paired) {
             currentMedia(this)?.let { json.put("media", it) }
             claudeKey(this)?.let { json.put("claudeKey", it) }
+            nextEvent(this)?.let { (title, start) -> json.put("next", JSONObject().put("title", title).put("start", start)) }
         }
         return json
     }

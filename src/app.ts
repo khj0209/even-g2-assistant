@@ -9,7 +9,8 @@ import {
 } from '@evenrealities/even_hub_sdk';
 import { mediaLine, statusLine } from './core/format';
 import { MODES, type ContextMode, type Media } from './core/modes';
-import { addFix, dashboard, emptyTrack, REST_MS, type Dash, type Track } from './core/dashboard';
+import { addFix, dashboard, emptyTrack, REST_MS, splitNotice, type Dash, type Track } from './core/dashboard';
+import { isParkingQuestion, parkingAnswer, type Parking } from './core/parking';
 import { replyPages } from './core/reply';
 import { DEFAULT_SETTINGS, type DeviceState, type Settings, type TempRange } from './core/types';
 import { addUsage, emptyUsage, parseUsage, rollUsage, totalTokens, type UsageState } from './core/usage';
@@ -18,7 +19,15 @@ import { POPUP, SCREEN } from './glasses/layout';
 import { Renderer, type Sink } from './glasses/renderer';
 import type { KV } from './platform/storage';
 import { askClaude, describeError, makeClient } from './services/claude';
-import { askAgent, appendTurn, listAgentSessions, SessionStore, type AgentSessionInfo } from './services/sessions';
+import {
+  agentNeedsAction,
+  askAgent,
+  appendTurn,
+  finishedSessions,
+  listAgentSessions,
+  SessionStore,
+  type AgentSessionInfo,
+} from './services/sessions';
 import { GlassesMicRecognizer, SttUnavailableError } from './services/stt';
 import { DEFAULT_LOCATION, fetchTodayRange, type GeoPoint } from './services/weather';
 import { fetchContext, transcribe } from './services/context';
@@ -31,6 +40,8 @@ const TICK_MS = 1000;
 const WEATHER_TTL = 30 * 60_000;
 const MAX_LISTEN_MS = 60_000;
 const CONTEXT_POLL_MS = 5000;
+const AGENT_POLL_MS = 30_000;
+const REMIND_BEFORE_MS = 10 * 60_000;
 const NO_KEY = 'G2 Context 앱에서 Claude API 키를 등록하고, 이 화면 설정에 연결 코드를 넣어 주세요.';
 /** How long the conversation popup stays open after the last answer or message. */
 const ANSWER_HOLD_MS = 20_000;
@@ -38,6 +49,8 @@ const ANSWER_HOLD_MS = 20_000;
 const GPS_MODES = new Set<ContextMode>(['running']);
 /** Text width of the Drive HUD's now-playing box (src/drive/hud/layout.ts, 'media'). */
 const HUD_MEDIA_WIDTH = 360;
+/** Lyrics appear this much before they are sung, to make singing along easier. */
+export const LYRIC_LEAD_MS = 100;
 /** The host may deliver one touch as both a text and a sys event: drop repeats this close together. */
 const DEDUPE_MS = 150;
 
@@ -76,6 +89,16 @@ export class Assistant {
   companion = false;
   /** Why the last poll failed, for the phone screen. */
   companionError = '';
+  /** Next calendar event (from G2 Context), and the one already reminded of. */
+  nextEvent: { title: string; start: number } | undefined;
+  private remindedKey = '';
+  /** Running: last whole kilometre announced, and when it was reached. */
+  private splitKm = 0;
+  private splitAt = Date.now();
+  /** Where the car was left when the last drive ended. */
+  parking: Parking | null = null;
+  /** Agent session statuses at the last look, to notice when one finishes. */
+  private agentPrev: Map<string, string> | null = null;
   /** The Drive HUD has the glasses. */
   driving = false;
   /** The wearer left the HUD; stay out of it until G2 Context stops saying 운전. */
@@ -88,6 +111,8 @@ export class Assistant {
   /** Synced lyrics of the current track (null: none found or still loading), keyed by title|artist. */
   private lyrics: LyricLine[] | null = null;
   private lyricsKey = '';
+  /** Fires at the next lyric change: the 1 s tick alone would show lines up to a second late. */
+  private lyricTimer: ReturnType<typeof setTimeout> | undefined;
   /** Dashboard state for the current mode. */
   private modeSince = Date.now();
   private track: Track = emptyTrack();
@@ -125,6 +150,11 @@ export class Assistant {
       /* keep defaults */
     }
     this.usage = parseUsage(await kv.get('usage'), new Date());
+    try {
+      this.parking = JSON.parse((await kv.get('parking')) ?? 'null');
+    } catch {
+      /* none saved */
+    }
     await this.sessions.load();
     await this.showWelcome();
 
@@ -137,6 +167,13 @@ export class Assistant {
       bridge.onAppLocationChanged((l) => {
         if (!this.gpsOn) return;
         this.track = addFix(this.track, { lat: l.latitude, lon: l.longitude, accuracy: l.accuracy, speed: l.speed });
+        const km = Math.floor(this.track.distance / 1000);
+        if (this.mode === 'running' && km > this.splitKm) {
+          const now = Date.now();
+          this.notify(splitNotice(km, now - this.splitAt, now - this.modeSince, this.track.distance));
+          this.splitKm = km;
+          this.splitAt = now;
+        }
       });
       bridge
         .getDeviceInfo()
@@ -149,6 +186,7 @@ export class Assistant {
     setInterval(() => void this.refreshWeather(), WEATHER_TTL);
     void this.refreshMode();
     setInterval(() => void this.refreshMode(), CONTEXT_POLL_MS);
+    setInterval(() => void this.pollAgents(), AGENT_POLL_MS);
   }
 
   addSink(sink: Sink): void {
@@ -180,6 +218,7 @@ export class Assistant {
     if (next !== 'driving') this.driveSnoozed = false;
     this.syncDrive(next === 'driving' && !this.driveSnoozed);
     this.meetingEnd = ctx?.end;
+    this.nextEvent = ctx?.next;
     // Kept in memory only; it disappears when G2 Context removes it or stops answering.
     if (ctx?.claudeKey !== this.claudeKey) {
       const hadKey = !!this.claudeKey;
@@ -189,8 +228,13 @@ export class Assistant {
     this.media = ctx?.media;
     this.mediaAt = Date.now();
     this.loadLyrics();
+    // After the key handling above, which closes the popup when the key first arrives.
+    this.remindUpcoming();
     if (next === this.mode) return this.render();
+    if (this.mode === 'driving') void this.saveParking();
     this.mode = next;
+    this.splitKm = 0;
+    this.splitAt = Date.now();
     this.modeSince = Date.now();
     this.track = emptyTrack();
     this.sets = 0;
@@ -221,9 +265,88 @@ export class Assistant {
     const m = this.media;
     if (!m) return ['', ''];
     const pos = (m.pos ?? 0) + (Date.now() - this.mediaAt);
-    const lyric = this.lyrics ? lineAt(this.lyrics, pos) : '';
+    const lyric = this.lyrics ? lineAt(this.lyrics, pos + LYRIC_LEAD_MS) : '';
     const shown = compact ? { ...m, title: searchTerms(m).track, app: undefined } : m;
     return [mediaLine({ ...shown, pos: m.pos != null ? pos : undefined }, width), lyric ? ellipsize(lyric, width) : ''];
+  }
+
+  /** Re-renders exactly when the next lyric line is due (minus the lead), if that's before the next tick. */
+  private scheduleLyric(): void {
+    clearTimeout(this.lyricTimer);
+    const m = this.media;
+    if (!m || m.pos == null || !this.lyrics) return;
+    const pos = m.pos + (Date.now() - this.mediaAt) + LYRIC_LEAD_MS;
+    const next = this.lyrics.find((l) => l.t > pos);
+    if (next && next.t - pos < TICK_MS) this.lyricTimer = setTimeout(() => this.render(), next.t - pos + 5);
+  }
+
+  /**
+   * A short popup for things that happen on their own (a reminder, a split, a finished agent).
+   * Not while the HUD has the glasses or a conversation is going. Returns whether it was shown.
+   */
+  private notify(text: string): boolean {
+    if (this.driving || this.stage !== 'idle') return false;
+    this.resetReply(text);
+    this.render();
+    return true;
+  }
+
+  /** Pops up the next event once, 10 minutes before it starts. */
+  private remindUpcoming(): void {
+    const n = this.nextEvent;
+    if (!n) return;
+    const left = n.start - Date.now();
+    const key = `${n.title}|${n.start}`;
+    if (left <= 0 || left > REMIND_BEFORE_MS || key === this.remindedKey) return;
+    const at = new Date(n.start);
+    const clock = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+    if (this.notify(`${Math.ceil(left / 60_000)}분 후 일정: ${n.title} (${clock})`)) this.remindedKey = key;
+  }
+
+  /** Where the car is: saved when a drive ends. */
+  private async saveParking(): Promise<void> {
+    const loc = await this.deps.bridge
+      ?.getAppLocation({ accuracy: AppLocationAccuracy.High, timeoutMs: 10_000 })
+      .catch(() => null);
+    if (!loc) return;
+    this.parking = { lat: loc.latitude, lon: loc.longitude, at: Date.now() };
+    await this.deps.kv.set('parking', JSON.stringify(this.parking));
+    this.notify('주차 위치를 저장했어요. "차 어디 있어?"라고 물어보세요.');
+  }
+
+  /** Answers "차 어디 있어?" from the saved spot, without asking Claude. */
+  private async answerParking(q: string): Promise<void> {
+    this.stage = 'answering';
+    this.question = q;
+    this.answer = '위치 확인 중…';
+    this.layoutReply(false);
+    this.render();
+    const loc = this.parking
+      ? await this.deps.bridge?.getAppLocation({ accuracy: AppLocationAccuracy.High, timeoutMs: 8000 }).catch(() => null)
+      : null;
+    this.answer = parkingAnswer(this.parking, loc ? { lat: loc.latitude, lon: loc.longitude } : null, Date.now());
+    this.stage = 'idle';
+    this.layoutReply(false);
+    this.render();
+  }
+
+  /** Tells the wearer when a Claude agent session finishes or stops to wait for an approval. */
+  private async pollAgents(): Promise<void> {
+    const c = await this.client();
+    if (!c) return;
+    let list: AgentSessionInfo[];
+    try {
+      list = await listAgentSessions(c);
+    } catch {
+      return; // no Managed Agents on this key, or offline
+    }
+    const done = finishedSessions(this.agentPrev, list);
+    this.agentPrev = new Map(list.map((s) => [s.id, s.status]));
+    for (const id of done) {
+      const s = list.find((x) => x.id === id)!;
+      const needs = await agentNeedsAction(c, id).catch(() => false);
+      this.notify(`${needs ? '에이전트 승인 필요' : '에이전트 작업 완료'}: ${s.title}`);
+    }
   }
 
   /** Hands the glasses to the Drive HUD and back. No conversation while driving. */
@@ -272,7 +395,16 @@ export class Assistant {
   /** The mode's dashboard, the screen under the popup. */
   private dashboardView(): Dash | null {
     return dashboard(
-      { mode: this.mode, since: this.modeSince, track: this.track, sets: this.sets, restUntil: this.restUntil, meetingEnd: this.meetingEnd },
+      {
+        mode: this.mode,
+        since: this.modeSince,
+        track: this.track,
+        sets: this.sets,
+        restUntil: this.restUntil,
+        meetingEnd: this.meetingEnd,
+        next: this.nextEvent,
+        targetPace: this.settings.targetPace,
+      },
       Date.now(),
     );
   }
@@ -442,6 +574,7 @@ export class Assistant {
   async ask(text: string): Promise<void> {
     const q = text.trim();
     if (!q || this.stage !== 'idle') return;
+    if (isParkingQuestion(q)) return this.answerParking(q);
     const client = await this.client();
     if (!client) return this.fail('휴대폰 화면에서 Claude API 키를 먼저 등록해 주세요.');
     this.stage = 'answering';
@@ -531,10 +664,11 @@ export class Assistant {
       // The popup covers the lyric line, and the glasses would show both through each other.
       media: popup ? mediaLine1 : [mediaLine1, lyric].filter(Boolean).join('\n'),
       // Under an open popup nothing is drawn: the glasses add light, so anything behind would show through.
-      hero: popup || !dash ? null : { big: dash.big, caption: dash.caption },
+      hero: popup || !dash?.big ? null : { big: dash.big, caption: dash.caption },
       detail: popup || !dash ? '' : dash.detail,
       popup: popup ? (this.pages[this.page] ?? '') : null,
     });
+    this.scheduleLyric();
     for (const cb of this.listeners) cb();
   }
 

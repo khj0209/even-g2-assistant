@@ -22,6 +22,18 @@ class ModeTest {
     }
 
     @Test
+    fun carBluetoothMeansDriving() {
+        assertEquals(Mode.DRIVING to "car", Mode.resolve(Mode.DEV, null, true, carConnected = true))
+    }
+
+    @Test
+    fun carOnlyIgnoresVehicleMotionWithoutTheCar() {
+        // A bus or taxi passenger: motion says vehicle, but this isn't the wearer's car.
+        assertEquals(Mode.ASSISTANT to "default", Mode.resolve(null, Mode.DRIVING, false, carOnly = true))
+        assertEquals(Mode.DRIVING to "activity", Mode.resolve(null, Mode.DRIVING, false, carOnly = false))
+    }
+
+    @Test
     fun parsesIds() {
         assertEquals(Mode.WORKOUT, Mode.of("workout"))
         assertEquals(null, Mode.of("auto"))

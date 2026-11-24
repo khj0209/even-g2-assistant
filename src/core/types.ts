@@ -17,6 +17,8 @@ export interface Settings {
   companionKey: string;
   /** Monthly token budget for the "AI 잔여" readout; 0 = just show tokens used. */
   monthlyBudget: number;
+  /** Running target pace in seconds per km; 0 = none. */
+  targetPace: number;
 }
 
 export const MODELS: { id: string; label: string }[] = [
@@ -29,4 +31,5 @@ export const DEFAULT_SETTINGS: Settings = {
   model: 'claude-opus-5-5',
   monthlyBudget: 1_000_000,
   companionKey: '',
+  targetPace: 0,
 };

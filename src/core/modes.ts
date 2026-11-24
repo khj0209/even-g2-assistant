@@ -48,6 +48,8 @@ export interface Context {
   media?: Media;
   /** The Claude API key entered in G2 Context; only sent with the pairing code. */
   claudeKey?: string;
+  /** The next calendar event within 12 hours; only sent with the pairing code. Start in ms. */
+  next?: { title: string; start: number };
 }
 
 const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
@@ -55,7 +57,14 @@ const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >=
 
 /** The companion's `GET /mode` reply, or null when it isn't a valid one. Unknown or malformed fields are dropped. */
 export function parseContext(json: unknown): Context | null {
-  const j = json as { mode?: unknown; source?: unknown; end?: unknown; media?: Record<string, unknown>; claudeKey?: unknown } | null;
+  const j = json as {
+    mode?: unknown;
+    source?: unknown;
+    end?: unknown;
+    media?: Record<string, unknown>;
+    claudeKey?: unknown;
+    next?: { title?: unknown; start?: unknown };
+  } | null;
   if (!j || !isMode(j.mode)) return null;
   const m = j.media;
   const title = str(m?.title);
@@ -65,5 +74,6 @@ export function parseContext(json: unknown): Context | null {
     ...(num(j.end) != null ? { end: num(j.end) } : {}),
     ...(title ? { media: { title, artist: str(m!.artist), app: str(m!.app), pos: num(m!.pos), dur: num(m!.dur) } } : {}),
     ...(typeof j.claudeKey === 'string' && looksLikeAnthropicKey(j.claudeKey) ? { claudeKey: j.claudeKey.trim() } : {}),
+    ...(str(j.next?.title) && num(j.next?.start) != null ? { next: { title: str(j.next!.title)!, start: num(j.next!.start)! } } : {}),
   };
 }

@@ -83,6 +83,16 @@ async function main(): Promise<void> {
   budget.onchange = () => void app.saveSettings({ monthlyBudget: Math.max(0, Math.floor(Number(budget.value) || 0)) });
   $('usage-reset').onclick = () => confirm('이번 달 토큰 사용량 기록을 초기화할까요?') && void app.resetUsage();
 
+  // ------------------------------------------------------------ running target pace ("5:30" ↔ 330 s/km)
+  const pace = $<HTMLInputElement>('target-pace');
+  const t = app.settings.targetPace;
+  pace.value = t ? `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}` : '';
+  pace.onchange = () => {
+    const m = /^(\d{1,2}):([0-5]\d)$/.exec(pace.value.trim());
+    void app.saveSettings({ targetPace: m ? Number(m[1]) * 60 + Number(m[2]) : 0 });
+    if (!m) pace.value = '';
+  };
+
   // ------------------------------------------------------------ G2 Context pairing (the mode itself is chosen in that app)
   const companionKey = $<HTMLInputElement>('companion-key');
   companionKey.value = app.settings.companionKey;
@@ -175,6 +185,9 @@ async function main(): Promise<void> {
     ptt.classList.toggle('active', app.stage === 'listening');
     $('now-mode').textContent = MODES[app.mode].label;
     $('mirror').hidden = app.driving;
+    $('parking-state').textContent = app.parking
+      ? `주차 위치 저장됨 (${new Date(app.parking.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}) — 안경에 "차 어디 있어?"`
+      : '';
     $('drive-mirror').hidden = !app.driving;
     $('companion-state').textContent = app.companion ? 'G2 Context 연결됨' : `G2 Context 연결 안 됨 — ${app.companionError}`;
     $('key-state').textContent = app.claudeKey

@@ -56,6 +56,7 @@
           G2 Context가 운전을 감지하면 안경이 속도·제한속도·단속 카메라·길 안내·미니맵 화면으로 바뀝니다. 두 번 탭하거나 안경 메뉴
           "운전 모드 끝내기"로 나오면, 운전이 끝날 때까지 다시 들어가지 않습니다.
         </p>
+        <p id="parking-state" class="message"></p>
         <p id="bg-report" class="message"></p>
         <details open>
           <summary>길 안내</summary>
@@ -159,6 +160,12 @@
           G2 Context에서 키를 받아 메모리에만 두고(저장하지 않음), 안경 마이크 소리를 G2 Context의 휴대폰 음성 인식으로 글자로 바꿉니다.
           연결 코드가 있어야 같은 휴대폰의 다른 앱이 키와 재생 정보를 읽지 못합니다.
         </p>
+      </details>
+
+      <details class="card setting">
+        <summary>러닝</summary>
+        <label>목표 페이스 (분:초 /km, 비우면 끔) <input id="target-pace" type="text" inputmode="numeric" placeholder="예: 5:30" autocomplete="off" /></label>
+        <p class="note">러닝 화면에 목표보다 몇 초 빠른지·느린지 보여주고, 1 km마다 구간 기록이 대화창으로 뜹니다.</p>
       </details>
 
       <details class="card setting">

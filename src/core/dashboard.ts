@@ -67,6 +67,22 @@ export interface DashState {
   restUntil: number;
   /** Meeting: when the calendar event ends (ms), if the companion sent it. */
   meetingEnd?: number;
+  /** Next calendar event (plain mode shows it). */
+  next?: { title: string; start: number };
+  /** Running: target pace in s/km, 0 for none. */
+  targetPace?: number;
+}
+
+/** "2 km · 구간 5'12\" · 평균 5'20\"", shown as each kilometre is completed. */
+export function splitNotice(km: number, splitMs: number, elapsedMs: number, distanceM: number): string {
+  return `${km} km · 구간 ${formatPace(splitMs / 1000)} · 평균 ${formatPace(elapsedMs / 1000 / (distanceM / 1000))}`;
+}
+
+/** How the current pace compares with the target: "목표 5'30\" · 8초 느림". */
+export function paceVersusTarget(cur: number | null, target: number): string {
+  if (cur == null) return `목표 ${formatPace(target)}`;
+  const d = Math.round(cur - target);
+  return `목표 ${formatPace(target)} · ${d === 0 ? '딱 맞음' : d > 0 ? `${d}초 느림` : `${-d}초 빠름`}`;
 }
 
 /** A mode's glasses panel: one big number (drawn as an image) with its caption, and detail lines. */
@@ -87,7 +103,7 @@ export function dashboard(s: DashState, now: number): Dash | null {
       const cur = speed != null && speed > 0.5 ? 1000 / speed : null;
       return {
         big: formatPace(cur),
-        caption: '현재 페이스 /km',
+        caption: s.targetPace ? paceVersusTarget(cur, s.targetPace) : '현재 페이스 /km',
         detail: `시간 ${formatDuration(elapsed)}   거리 ${km.toFixed(2)}km   평균 ${formatPace(avg)}`,
       };
     }
@@ -117,7 +133,13 @@ export function dashboard(s: DashState, now: number): Dash | null {
         ? { big: `${Math.ceil(left / 60_000)}분`, caption: `${formatClock(new Date(s.meetingEnd!))}까지`, detail: `회의 경과 ${formatDuration(elapsed)}` }
         : { big: formatDuration(elapsed), caption: '회의 경과', detail: '' };
     }
-    case 'assistant':
-      return null;
+    case 'assistant': {
+      // No big number in plain mode: just the next event on the bottom line, if there is one.
+      const n = s.next && s.next.start > now ? s.next : null;
+      if (!n) return null;
+      const mins = Math.ceil((n.start - now) / 60_000);
+      const when = mins < 60 ? `${mins}분 후` : `${Math.floor(mins / 60)}시간 ${mins % 60}분 후`;
+      return { big: '', caption: '', detail: `다음 일정  ${formatClock(new Date(n.start))} ${n.title} · ${when}` };
+    }
   }
 }
