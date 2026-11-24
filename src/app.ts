@@ -22,6 +22,8 @@ import { askAgent, appendTurn, listAgentSessions, SessionStore, type AgentSessio
 import { GlassesMicRecognizer, SttUnavailableError } from './services/stt';
 import { DEFAULT_LOCATION, fetchTodayRange, type GeoPoint } from './services/weather';
 import { fetchContext, transcribe } from './services/context';
+import { fetchLyrics, lineAt, searchTerms, type LyricLine } from './services/lyrics';
+import { ellipsize } from './core/textlayout';
 
 type Stage = 'idle' | 'listening' | 'transcribing' | 'answering';
 
@@ -34,6 +36,8 @@ const NO_KEY = 'G2 Context 앱에서 Claude API 키를 등록하고, 이 화면 
 const ANSWER_HOLD_MS = 20_000;
 // Driving has the Drive HUD's own location tracking; two users of the same GPS stream would fight.
 const GPS_MODES = new Set<ContextMode>(['running']);
+/** Text width of the Drive HUD's now-playing box (src/drive/hud/layout.ts, 'media'). */
+const HUD_MEDIA_WIDTH = 360;
 /** The host may deliver one touch as both a text and a sys event: drop repeats this close together. */
 const DEDUPE_MS = 150;
 
@@ -42,6 +46,8 @@ export interface DriveSide {
   /** `onExit`: the wearer left the HUD (double tap or its "운전 모드 끝내기" menu). */
   startDriving(onExit: () => void): void;
   stopDriving(): void;
+  /** What's playing and the current lyric for the HUD's top-left (two lines, or ''). */
+  setMedia(text: string): void;
 }
 
 export interface AppDeps {
@@ -76,8 +82,12 @@ export class Assistant {
   private driveSnoozed = false;
   /** The Claude key from G2 Context (needs the pairing code). Memory only. */
   claudeKey: string | undefined;
-  /** What's playing on the phone, from the companion (needs the pairing code). */
+  /** What's playing on the phone, from the companion (needs the pairing code), and when it was read. */
   media: Media | undefined;
+  private mediaAt = 0;
+  /** Synced lyrics of the current track (null: none found or still loading), keyed by title|artist. */
+  private lyrics: LyricLine[] | null = null;
+  private lyricsKey = '';
   /** Dashboard state for the current mode. */
   private modeSince = Date.now();
   private track: Track = emptyTrack();
@@ -177,6 +187,8 @@ export class Assistant {
       if (!hadKey && this.claudeKey && this.stage === 'idle') this.closePopup(); // drop the "register a key" message
     }
     this.media = ctx?.media;
+    this.mediaAt = Date.now();
+    this.loadLyrics();
     if (next === this.mode) return this.render();
     this.mode = next;
     this.modeSince = Date.now();
@@ -185,6 +197,33 @@ export class Assistant {
     this.restUntil = 0;
     void this.setGps(GPS_MODES.has(next));
     this.render();
+  }
+
+  private loadLyrics(): void {
+    const m = this.media;
+    const key = m ? `${m.title}|${m.artist ?? ''}` : '';
+    if (key === this.lyricsKey) return;
+    this.lyricsKey = key;
+    this.lyrics = null;
+    if (!m) return;
+    fetchLyrics(m)
+      .then((lines) => {
+        if (this.lyricsKey === key) this.lyrics = lines;
+      })
+      .catch(() => undefined); // no lyrics is fine
+  }
+
+  /**
+   * "앱 · 제목 - 가수  1:23/3:45" and, when synced lyrics exist, the line being sung. Position advances
+   * between polls. `compact` (the HUD's narrow box) drops the app name and tags like "(Official MV)".
+   */
+  mediaLines(width: number, compact = false): [string, string] {
+    const m = this.media;
+    if (!m) return ['', ''];
+    const pos = (m.pos ?? 0) + (Date.now() - this.mediaAt);
+    const lyric = this.lyrics ? lineAt(this.lyrics, pos) : '';
+    const shown = compact ? { ...m, title: searchTerms(m).track, app: undefined } : m;
+    return [mediaLine({ ...shown, pos: m.pos != null ? pos : undefined }, width), lyric ? ellipsize(lyric, width) : ''];
   }
 
   /** Hands the glasses to the Drive HUD and back. No conversation while driving. */
@@ -478,6 +517,8 @@ export class Assistant {
   render(): void {
     const dash = this.dashboardView();
     const popup = this.popupOpen();
+    const [mediaLine1, lyric] = this.mediaLines(SCREEN.w - 16);
+    if (this.driving) this.deps.drive?.setMedia(this.mediaLines(HUD_MEDIA_WIDTH, true).filter(Boolean).join('\n'));
     this.renderer.render({
       status: statusLine({
         mode: MODES[this.mode].label,
@@ -487,7 +528,8 @@ export class Assistant {
         used: this.usedTokens(),
         budget: this.settings.monthlyBudget,
       }),
-      media: mediaLine(this.media, SCREEN.w - 16),
+      // The popup covers the lyric line, and the glasses would show both through each other.
+      media: popup ? mediaLine1 : [mediaLine1, lyric].filter(Boolean).join('\n'),
       // Under an open popup nothing is drawn: the glasses add light, so anything behind would show through.
       hero: popup || !dash ? null : { big: dash.big, caption: dash.caption },
       detail: popup || !dash ? '' : dash.detail,

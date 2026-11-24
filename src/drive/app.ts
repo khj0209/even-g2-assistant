@@ -126,6 +126,13 @@ export class App {
     this.tick();
   }
 
+  /** What's playing and the current lyric, set by the assistant every second. */
+  private media = '';
+
+  setMedia(text: string): void {
+    this.media = text;
+  }
+
   get driving(): boolean {
     return this.running;
   }
@@ -546,6 +553,7 @@ export class App {
       section,
       flash,
       dim,
+      media: this.media,
       settings: this.settings,
       now,
     });

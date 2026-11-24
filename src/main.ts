@@ -1,6 +1,6 @@
 import { OsEventTypeList } from '@evenrealities/even_hub_sdk';
 import { Assistant } from './app';
-import { formatTokens, mediaLine } from './core/format';
+import { formatTokens } from './core/format';
 import { MODES } from './core/modes';
 import { MODELS } from './core/types';
 import { connectBridge } from './platform/bridge';
@@ -181,7 +181,7 @@ async function main(): Promise<void> {
       ? `받음 (${maskKey(app.claudeKey)})`
       : !app.companion ? 'G2 Context 연결 필요' : app.settings.companionKey ? 'G2 Context에 키가 없거나 연결 코드가 달라요' : '연결 코드를 입력하세요';
     $('pill-key').className = `pill ${app.claudeKey ? 'ok' : 'bad'}`;
-    $('now-media').textContent = app.media ? mediaLine(app.media, 10_000) : '';
+    $('now-media').textContent = app.mediaLines(10_000).filter(Boolean).join('\n');
     say($('notice'), app.notice, !!app.notice);
     const u = app.usage;
     $('usage').textContent =

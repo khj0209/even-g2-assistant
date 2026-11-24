@@ -6,6 +6,8 @@ const CONNECT = [
   'https://api.open-meteo.com',
   'http://127.0.0.1:8765',
   'http://localhost:8765',
+  // Synced lyrics of what's playing (title and artist only).
+  'https://lrclib.net',
   // Drive HUD: map tiles, speed limits/cameras, routing and place search.
   'https://khj0209.github.io', 'https://overpass-api.de', 'https://overpass.private.coffee', 'https://maps.mail.ru', 'https://router.project-osrm.org', 'https://nominatim.openstreetmap.org', 'https://apis.openapi.sk.com',
 ];

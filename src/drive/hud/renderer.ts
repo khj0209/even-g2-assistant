@@ -88,7 +88,9 @@ export class HudRenderer {
         return [key, () => drawMinimap(v.minimap)];
       }
       case 'info':
-        return [v.info];
+        return [v.info || ' '];
+      case 'media':
+        return [v.media || ' '];
       default:
         return [' '];
     }

@@ -1,4 +1,4 @@
-import { compass, interpolate, localOffset, projectOnSegment } from '../core/geo';
+import { interpolate, localOffset, projectOnSegment } from '../core/geo';
 import { displayLimit, displaySpeed, formatClock, formatDistance, KMH_PER_MPS, unitLabel } from '../core/format';
 import type { CameraAlert, Fix, LatLon, ManeuverIcon, MinimapPoint, MinimapView, NavProgress, SectionStatus, Settings } from '../core/types';
 import type { RoadData } from '../services/roads';
@@ -20,6 +20,8 @@ export interface HudInput {
   section?: SectionStatus | null;
   /** A short message to show in the info line for a moment (menu feedback, warnings). */
   flash?: string | null;
+  /** What's playing and the current lyric, from the assistant (two lines, or ''). */
+  media?: string;
   /** Night: dim the whole HUD. */
   dim?: boolean;
   settings: Settings;
@@ -34,7 +36,9 @@ export interface HudView {
   over: boolean;
   limit: number | null;
   nav: { icon: ManeuverIcon; dist: string } | null;
-  /** One line above the cluster: road and arrival while guiding, otherwise clock and heading. */
+  /** Top-left: what's playing and the current lyric. */
+  media: string;
+  /** One line above the cluster: road and arrival while guiding; otherwise only GPS warnings. */
   info: string;
   /** Short camera / section warning, e.g. "단속 300 m", or empty. Lines split by "\n". */
   alert: string;
@@ -212,11 +216,11 @@ export function buildView(input: HudInput): HudView {
   const limit = input.limit ?? cam?.limit ?? null;
 
   let info: string;
-  if (!fix) info = `${formatClock(now)}  GPS 없음`;
+  if (!fix) info = 'GPS 없음';
   else if (nav) {
     const eta = formatClock(new Date(now.getTime() + nav.remainingTime * 1000));
     info = [nav.roadName, `${formatDistance(nav.remainingDist, unit)} · ${eta} 도착`].filter(Boolean).join('  ');
-  } else info = [formatClock(now), fix.heading != null ? compass(fix.heading) : ''].filter(Boolean).join('  ');
+  } else info = ''; // no clock or heading while driving: the top-left shows what's playing instead
   // Say so when the position is extrapolated (GPS lost in a tunnel), so it isn't taken as measured.
   if (fix?.estimated) info = `GPS 추정 · ${info}`;
   if (input.flash) info = input.flash;
@@ -239,6 +243,7 @@ export function buildView(input: HudInput): HudView {
     limit: limit != null ? displayLimit(limit, unit) : null,
     nav: nav && { icon: nav.icon, dist: formatDistance(nav.distToManeuver, unit) },
     info,
+    media: input.media ?? '',
     alert,
     sectionOver,
     dim: !!input.dim,

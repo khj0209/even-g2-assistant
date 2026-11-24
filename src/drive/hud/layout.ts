@@ -46,4 +46,6 @@ export const LAYOUT: Box[] = [
     h: MINIMAP.h,
     minInterval: 3000,
   },
+  // Top-left, where the whole-route overview used to be: what's playing and the current lyric.
+  { id: 7, name: 'media', kind: 'text', x: 12, y: 10, w: SCREEN.w - MINIMAP.w - 36, h: 66 },
 ];

@@ -15,15 +15,16 @@ export interface Box {
 }
 
 /** Mode dashboard's big number, drawn as an image because the glasses' text font has one size. */
-export const HERO = { x: 144, y: 72, w: 288, h: 112 };
+export const HERO = { x: 144, y: 100, w: 288, h: 112 };
 
 /** The conversation popup, and the estimated text width / line count that fits inside its frame. */
 export const POPUP = { x: 20, y: 68, w: 536, h: 216, textWidth: 486, lines: 6 };
 
 const status: Box = { id: 1, name: 'status', kind: 'text', x: 0, y: 0, w: SCREEN.w, h: 36 };
-const media: Box = { id: 2, name: 'media', kind: 'text', x: 0, y: 32, w: SCREEN.w, h: 34 };
+// Two lines: what's playing, and the lyric being sung.
+const media: Box = { id: 2, name: 'media', kind: 'text', x: 0, y: 32, w: SCREEN.w, h: 66 };
 const hero: Box = { id: 3, name: 'hero', kind: 'image', ...HERO };
-const detail: Box = { id: 4, name: 'detail', kind: 'text', x: 20, y: HERO.y + HERO.h + 4, w: 536, h: 98 };
+const detail: Box = { id: 4, name: 'detail', kind: 'text', x: 20, y: HERO.y + HERO.h + 4, w: 536, h: 70 };
 
 // Ids are contiguous from 1: a non-contiguous id once failed to render on real hardware.
 /** Status, now playing and the mode's dashboard. */
