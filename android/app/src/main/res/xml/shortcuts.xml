@@ -78,4 +78,26 @@
             android:targetClass="com.khj0209.g2context.SetModeActivity"
             android:targetPackage="com.khj0209.g2context" />
     </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@android:drawable/ic_menu_directions"
+        android:shortcutId="drive_home"
+        android:shortcutShortLabel="@string/drive_home">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="g2context://drive/home"
+            android:targetClass="com.khj0209.g2context.SetModeActivity"
+            android:targetPackage="com.khj0209.g2context" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@android:drawable/ic_menu_directions"
+        android:shortcutId="drive_work"
+        android:shortcutShortLabel="@string/drive_work">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="g2context://drive/work"
+            android:targetClass="com.khj0209.g2context.SetModeActivity"
+            android:targetPackage="com.khj0209.g2context" />
+    </shortcut>
 </shortcuts>

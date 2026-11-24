@@ -56,6 +56,8 @@ export interface Context {
   smartthings?: boolean;
   /** The newest Claude app notification (a Claude Code task finished or needs approval); paired only. */
   notice?: Notice;
+  /** A commute routine (g2context://drive/home|work) asked for guidance there, at `at` (ms). */
+  dest?: { to: 'home' | 'work'; at: number };
 }
 
 export interface Notice {
@@ -98,6 +100,7 @@ export function parseContext(json: unknown): Context | null {
     health?: Record<string, unknown>;
     smartthings?: unknown;
     notice?: Record<string, unknown>;
+    dest?: { to?: unknown; at?: unknown };
   } | null;
   if (!j || !isMode(j.mode)) return null;
   const m = j.media;
@@ -110,6 +113,7 @@ export function parseContext(json: unknown): Context | null {
     ...(typeof j.claudeKey === 'string' && looksLikeAnthropicKey(j.claudeKey) ? { claudeKey: j.claudeKey.trim() } : {}),
     ...(str(j.next?.title) && num(j.next?.start) != null ? { next: { title: str(j.next!.title)!, start: num(j.next!.start)! } } : {}),
     ...(j.smartthings === true ? { smartthings: true } : {}),
+    ...((j.dest?.to === 'home' || j.dest?.to === 'work') && num(j.dest.at) != null ? { dest: { to: j.dest.to, at: num(j.dest.at)! } } : {}),
     ...(str(j.notice?.id) && num(j.notice?.at) != null && (str(j.notice?.title) || str(j.notice?.text))
       ? { notice: { id: str(j.notice!.id)!, title: str(j.notice!.title) ?? '', text: str(j.notice!.text) ?? '', at: num(j.notice!.at)! } }
       : {}),

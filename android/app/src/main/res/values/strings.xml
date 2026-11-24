@@ -7,4 +7,6 @@
     <string name="mode_driving">G2 운전 모드</string>
     <string name="mode_dev">G2 개발 모드</string>
     <string name="mode_meeting">G2 회의 모드</string>
+    <string name="drive_home">G2 집으로 안내</string>
+    <string name="drive_work">G2 회사로 안내</string>
 </resources>

@@ -69,6 +69,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:host="mode" android:scheme="g2context" />
+                <data android:host="drive" android:scheme="g2context" />
             </intent-filter>
         </activity>
 

@@ -99,6 +99,9 @@ describe('modes', () => {
     expect(parseContext({ mode: 'flying' })).toBeNull();
     expect(parseContext(null)).toBeNull();
     expect(parseContext({ mode: 'toString' })).toBeNull();
+    expect(parseContext({ mode: 'driving', source: 'routine', dest: { to: 'work', at: 5 } })?.dest).toEqual({ to: 'work', at: 5 });
+    expect(parseContext({ mode: 'driving', dest: { to: 'mars', at: 5 } })?.dest).toBeUndefined();
+    expect(parseContext({ mode: 'driving', dest: { to: 'home' } })?.dest).toBeUndefined();
   });
 
   it('takes the Claude key only when it looks like one', () => {

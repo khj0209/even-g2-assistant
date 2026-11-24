@@ -54,6 +54,8 @@ const HUD_MEDIA_WIDTH = 360;
 export const LYRIC_LEAD_MS = 100;
 /** The host may deliver one touch as both a text and a sys event: drop repeats this close together. */
 const DEDUPE_MS = 150;
+/** A commute request older than this is stale (the plugin was opened long after the routine ran). */
+const DEST_FRESH_MS = 30 * 60_000;
 
 /** The embedded Drive HUD (src/drive), which owns the glasses while driving. */
 export interface DriveSide {
@@ -62,6 +64,8 @@ export interface DriveSide {
   stopDriving(): void;
   /** What's playing and the current lyric for the HUD's top-left (two lines, or ''). */
   setMedia(text: string): void;
+  /** Guide to the saved home / work place (waits for GPS if needed). */
+  navigateSaved(which: 'home' | 'work'): void;
 }
 
 export interface AppDeps {
@@ -110,6 +114,8 @@ export class Assistant {
   driving = false;
   /** The wearer left the HUD; stay out of it until G2 Context stops saying 운전. */
   private driveSnoozed = false;
+  /** The commute request already acted on, so each routine run starts guidance once. */
+  private destAt = 0;
   /** The Claude key from G2 Context (needs the pairing code). Memory only. */
   claudeKey: string | undefined;
   /** What's playing on the phone, from the companion (needs the pairing code), and when it was read. */
@@ -224,6 +230,11 @@ export class Assistant {
     const next = ctx?.mode ?? 'assistant';
     if (next !== 'driving') this.driveSnoozed = false;
     this.syncDrive(next === 'driving' && !this.driveSnoozed);
+    const dest = ctx?.dest;
+    if (this.driving && dest && dest.at > this.destAt && Date.now() - dest.at < DEST_FRESH_MS) {
+      this.destAt = dest.at;
+      this.deps.drive?.navigateSaved(dest.to);
+    }
     this.meetingEnd = ctx?.end;
     this.nextEvent = ctx?.next;
     this.health = ctx?.health;

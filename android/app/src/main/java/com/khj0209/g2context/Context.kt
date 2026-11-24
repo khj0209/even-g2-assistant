@@ -29,6 +29,8 @@ const val KEY_SERVED_AT = "served_at"
 const val KEY_CAR = "car" // a car's Bluetooth (car audio / hands-free) is connected
 const val KEY_CAR_NAME = "car_name"
 const val KEY_CAR_ONLY = "car_only" // count vehicle motion as driving only with the car's Bluetooth
+const val KEY_DEST = "dest" // "home" / "work": guidance a commute routine asked for (g2context://drive/<to>)
+const val KEY_DEST_AT = "dest_at"
 
 fun prefs(ctx: Context): SharedPreferences = ctx.getSharedPreferences("context", Context.MODE_PRIVATE)
 
@@ -101,7 +103,10 @@ class CarReceiver : BroadcastReceiver() {
         } catch (e: SecurityException) {
             null
         }
-        prefs(ctx).edit().putBoolean(KEY_CAR, connected).putString(KEY_CAR_NAME, name ?: "차량").apply()
+        prefs(ctx).edit().putBoolean(KEY_CAR, connected).putString(KEY_CAR_NAME, name ?: "차량").apply {
+            // A commute routine fixed 운전; leaving the car ends it, so the glasses don't stay in driving.
+            if (!connected && prefs(ctx).contains(KEY_DEST)) remove(KEY_DEST).remove(KEY_DEST_AT).remove(KEY_OVERRIDE)
+        }.apply()
         if (connected) startContextService(ctx)
     }
 }

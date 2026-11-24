@@ -84,6 +84,8 @@ export class App {
   private limitFilter = new LimitFilter();
   private tracker: RouteTracker | null = null;
   private destination: Place | null = null;
+  /** Guidance asked for before the first GPS fix; started when one arrives. */
+  private pendingDest: Place | null = null;
   private navMessage = '';
   private fix: Fix | null = null;
   private lastReroute = 0;
@@ -294,10 +296,18 @@ export class App {
       this.flash('안내를 종료했습니다');
       return;
     }
-    const place = id === 1 ? this.settings.home : id === 2 ? this.settings.work : null;
-    const [object, toward] = id === 1 ? ['집을', '집으로'] : ['회사를', '회사로'];
+    if (id === 1 || id === 2) this.navigateSaved(id === 1 ? 'home' : 'work');
+  }
+
+  /** Guide to the saved home / work place: from the glasses' menu or a commute routine. */
+  navigateSaved(which: 'home' | 'work'): void {
+    const place = this.settings[which];
+    const [object, toward] = which === 'home' ? ['집을', '집으로'] : ['회사를', '회사로'];
     if (!place) this.flash(`휴대폰에서 ${object} 먼저 등록하세요`);
-    else {
+    else if (!this.fix && !this.settings.demo) {
+      this.pendingDest = place;
+      this.flash(`GPS를 잡으면 ${toward} 안내합니다`);
+    } else {
       this.flash(`${toward} 경로 탐색 중…`);
       void this.navigateTo(place);
     }
@@ -432,6 +442,7 @@ export class App {
 
   stopNavigation(message = ''): void {
     this.tracker = null;
+    this.pendingDest = null;
     this.destination = null;
     this.navMessage = message;
     this.tick();
@@ -460,6 +471,7 @@ export class App {
     this.roads = new RoadDataService();
     this.tracker = null;
     this.destination = null;
+    this.pendingDest = null;
     this.navMessage = '';
     if (this.settings.demo) {
       this.roads.data = demoRoadData();
@@ -477,6 +489,11 @@ export class App {
       if (this.matcher.road && this.matcher.road !== this.matchedRoad) this.roadChanged = true;
       if (this.matcher.road) this.matchedRoad = this.matcher.road;
       if (!this.settings.demo) this.tmapLimits.update(this.fix, this.settings.tmapApiKey, this.matcher.road);
+      if (this.pendingDest) {
+        const place = this.pendingDest;
+        this.pendingDest = null;
+        void this.navigateTo(place);
+      }
       this.tick();
     });
   }

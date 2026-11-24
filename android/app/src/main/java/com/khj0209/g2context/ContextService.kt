@@ -233,6 +233,10 @@ class ContextService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         val (mode, source) = current
         val json = JSONObject().put("mode", mode.id).put("label", mode.label).put("source", source)
         meetingEndsAt?.let { if (mode == Mode.MEETING) json.put("end", it) }
+        if (mode == Mode.DRIVING) {
+            val p = prefs(this)
+            p.getString(KEY_DEST, null)?.let { json.put("dest", JSONObject().put("to", it).put("at", p.getLong(KEY_DEST_AT, 0))) }
+        }
         if (paired) {
             currentMedia(this)?.let { json.put("media", it) }
             claudeKey(this)?.let { json.put("claudeKey", it) }
