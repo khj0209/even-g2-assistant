@@ -19,6 +19,7 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import kotlin.concurrent.thread
+import org.json.JSONObject
 
 /**
  * Keeps the current mode up to date and serves it to the G2 glasses app (running in the Even app
@@ -26,6 +27,7 @@ import kotlin.concurrent.thread
  */
 class ContextService : Service(), SharedPreferences.OnSharedPreferenceChangeListener {
     @Volatile private var current: Pair<Mode, String> = Mode.ASSISTANT to "default"
+    @Volatile private var meetingEndsAt: Long? = null
     private var server: ServerSocket? = null
     private val handler = Handler(Looper.getMainLooper())
     // Calendar meetings start and end without any event we could listen to, so re-check regularly.
@@ -68,7 +70,8 @@ class ContextService : Service(), SharedPreferences.OnSharedPreferenceChangeList
 
     private fun compute(): Pair<Mode, String> {
         val p = prefs(this)
-        return Mode.resolve(Mode.of(p.getString(KEY_OVERRIDE, null)), Mode.of(p.getString(KEY_ACTIVITY, null)), inMeeting(this))
+        meetingEndsAt = meetingEnd(this)
+        return Mode.resolve(Mode.of(p.getString(KEY_OVERRIDE, null)), Mode.of(p.getString(KEY_ACTIVITY, null)), meetingEndsAt != null)
     }
 
     private fun refresh() {
@@ -118,7 +121,10 @@ class ContextService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         val cors = "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Private-Network: true\r\n" +
             "Access-Control-Allow-Methods: GET\r\nAccess-Control-Allow-Headers: *\r\n"
         val (mode, source) = current
-        val body = """{"mode":"${mode.id}","label":"${mode.label}","source":"$source"}""".toByteArray()
+        // Any app on the phone can read this, so it carries no calendar details beyond the end time.
+        val json = JSONObject().put("mode", mode.id).put("label", mode.label).put("source", source)
+        meetingEndsAt?.let { if (mode == Mode.MEETING) json.put("end", it) }
+        val body = json.toString().toByteArray()
         val head = when {
             request.startsWith("OPTIONS ") -> "HTTP/1.1 204 No Content\r\n$cors"
             request.startsWith("GET /mode") ->

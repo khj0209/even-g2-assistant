@@ -3,7 +3,7 @@ import { parseContext, type ContextMode } from '../core/modes';
 /** Where the G2 Context Android app serves the current situation (loopback only). Both spellings are tried. */
 export const CONTEXT_URLS = ['http://127.0.0.1:8765/mode', 'http://localhost:8765/mode'];
 
-export type ContextResult = { mode: ContextMode; source: string } | { error: string };
+export type ContextResult = { mode: ContextMode; source: string; end?: number } | { error: string };
 
 async function fetchOne(url: string): Promise<ContextResult> {
   try {

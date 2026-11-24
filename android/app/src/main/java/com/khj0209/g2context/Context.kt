@@ -38,16 +38,16 @@ fun startContextService(ctx: Context) {
     }
 }
 
-/** True while a busy, non-all-day calendar event is happening. */
-fun inMeeting(ctx: Context): Boolean {
-    if (!granted(ctx, Manifest.permission.READ_CALENDAR)) return false
+/** When the busy, non-all-day calendar event happening now ends (ms), or null when there is none. */
+fun meetingEnd(ctx: Context): Long? {
+    if (!granted(ctx, Manifest.permission.READ_CALENDAR)) return null
     val now = System.currentTimeMillis()
-    val cursor = Instances.query(ctx.contentResolver, arrayOf(Instances.ALL_DAY, Instances.AVAILABILITY), now, now + 1)
-        ?: return false
+    val cursor = Instances.query(ctx.contentResolver, arrayOf(Instances.ALL_DAY, Instances.AVAILABILITY, Instances.END), now, now + 1)
+        ?: return null
     cursor.use {
-        while (it.moveToNext()) if (it.getInt(0) == 0 && it.getInt(1) == Instances.AVAILABILITY_BUSY) return true
+        while (it.moveToNext()) if (it.getInt(0) == 0 && it.getInt(1) == Instances.AVAILABILITY_BUSY) return it.getLong(2)
     }
-    return false
+    return null
 }
 
 private val MOTION_TYPES = listOf(

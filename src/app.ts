@@ -9,6 +9,7 @@ import {
 } from '@evenrealities/even_hub_sdk';
 import { statusLine } from './core/format';
 import { MODES, type ContextMode } from './core/modes';
+import { addFix, dashboard, emptyTrack, REST_MS, type Track } from './core/dashboard';
 import { replyPages } from './core/reply';
 import { DEFAULT_SETTINGS, type DeviceState, type Mood, type Settings, type TempRange } from './core/types';
 import { addUsage, emptyUsage, parseUsage, rollUsage, totalTokens, type UsageState } from './core/usage';
@@ -36,6 +37,9 @@ const TICK_MS = 450;
 const WEATHER_TTL = 30 * 60_000;
 const MAX_LISTEN_MS = 60_000;
 const CONTEXT_POLL_MS = 5000;
+/** How long an answer stays up before the mode's dashboard comes back. */
+const ANSWER_HOLD_MS = 20_000;
+const GPS_MODES = new Set<ContextMode>(['running', 'driving']);
 /** The host may deliver one touch as both a text and a sys event: drop repeats this close together. */
 const DEDUPE_MS = 150;
 
@@ -66,6 +70,15 @@ export class Assistant {
   companion = false;
   /** Why the last poll failed, for the phone screen. */
   companionError = '';
+  /** Dashboard state for the current mode. */
+  private modeSince = Date.now();
+  private track: Track = emptyTrack();
+  private sets = 0;
+  private restUntil = 0;
+  private meetingEnd: number | undefined;
+  private gpsOn = false;
+  /** When the reply panel last showed something new (an answer, a message, a page turn). */
+  private replyAt = 0;
 
   private frame = 0;
   private moodSince = Date.now();
@@ -105,6 +118,10 @@ export class Assistant {
       this.glassesMic = new GlassesMicRecognizer(bridge, () => this.deps.secrets.get('openai'), this.settings.sttModel);
       bridge.onEvenHubEvent((e) => this.onGlassesEvent(e));
       bridge.onDeviceStatusChanged((s) => this.onDevice(s));
+      bridge.onAppLocationChanged((l) => {
+        if (!this.gpsOn) return;
+        this.track = addFix(this.track, { lat: l.latitude, lon: l.longitude, accuracy: l.accuracy, speed: l.speed });
+      });
       bridge
         .getDeviceInfo()
         .then((info) => info && this.onDevice(info.status))
@@ -149,13 +166,41 @@ export class Assistant {
     this.companionError = 'error' in r ? r.error : '';
     const fixed = this.settings.mode;
     const next = fixed !== 'auto' ? fixed : (ctx?.mode ?? 'assistant');
+    this.meetingEnd = ctx?.end;
     if (next === this.mode) return this.render();
     this.mode = next;
+    this.modeSince = Date.now();
+    this.track = emptyTrack();
+    this.sets = 0;
+    this.restUntil = 0;
+    void this.setGps(GPS_MODES.has(next));
     if (this.stage === 'idle') {
       this.setMood('happy');
-      this.resetReply(`${MODES[next].label} 모드로 바꿨어요.`);
+      if (next === 'assistant') this.resetReply(`${MODES[next].label} 모드로 바꿨어요.`);
+      else this.replyAt = 0; // show the new mode's dashboard right away
     }
     this.render();
+  }
+
+  private async setGps(on: boolean): Promise<void> {
+    const { bridge } = this.deps;
+    if (!bridge || on === this.gpsOn) return;
+    this.gpsOn = on;
+    try {
+      if (on) await bridge.startAppLocationUpdates({ accuracy: AppLocationAccuracy.High, intervalMs: 2000 });
+      else await bridge.stopAppLocationUpdates();
+    } catch (e) {
+      console.warn('[gps]', e);
+    }
+  }
+
+  /** The mode's dashboard, shown while idle once the last answer has been up for a while. */
+  private dashboardText(): string | null {
+    if (this.stage !== 'idle' || Date.now() - this.replyAt < ANSWER_HOLD_MS) return null;
+    return dashboard(
+      { mode: this.mode, since: this.modeSince, track: this.track, sets: this.sets, restUntil: this.restUntil, meetingEnd: this.meetingEnd },
+      Date.now(),
+    );
   }
 
   async resetUsage(): Promise<void> {
@@ -224,7 +269,14 @@ export class Assistant {
         break;
       case OsEventTypeList.CLICK_EVENT:
         if (this.stage === 'listening') void this.stopListening();
-        else if (this.stage === 'idle') this.turnPage(1, true);
+        else if (this.stage === 'idle' && this.dashboardText() && this.mode === 'workout') {
+          this.sets++;
+          this.restUntil = Date.now() + REST_MS;
+          this.render();
+        } else if (this.stage === 'idle' && this.dashboardText()) {
+          this.replyAt = Date.now(); // tap on a dashboard brings the last answer back
+          this.render();
+        } else if (this.stage === 'idle') this.turnPage(1, true);
         break;
       case OsEventTypeList.SCROLL_BOTTOM_EVENT:
         this.turnPage(1, false);
@@ -250,6 +302,7 @@ export class Assistant {
     p = Math.max(0, Math.min(this.pages.length - 1, p));
     if (p === this.page) return;
     this.page = p;
+    this.replyAt = Date.now();
     this.render();
   }
 
@@ -396,6 +449,7 @@ export class Assistant {
   private layoutReply(follow: boolean): void {
     this.pages = replyPages(this.question, this.answer, REPLY.textWidth, REPLY.lines);
     this.page = follow ? this.pages.length - 1 : 0;
+    this.replyAt = Date.now();
   }
 
   private async welcome(): Promise<string> {
@@ -428,7 +482,7 @@ export class Assistant {
       mood: this.mood,
       frame: this.frame,
       petName: PET_NAME,
-      reply: this.pages[this.page] ?? '',
+      reply: this.dashboardText() ?? this.pages[this.page] ?? '',
     });
     for (const cb of this.listeners) cb();
   }

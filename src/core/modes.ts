@@ -28,8 +28,13 @@ export const MODES: Record<ContextMode, { label: string; hint: string }> = {
 
 export const isMode = (v: unknown): v is ContextMode => typeof v === 'string' && Object.hasOwn(MODES, v);
 
-/** The companion's `GET /mode` reply, or null when it isn't a valid one. */
-export function parseContext(json: unknown): { mode: ContextMode; source: string } | null {
-  const j = json as { mode?: unknown; source?: unknown } | null;
-  return j && isMode(j.mode) ? { mode: j.mode, source: typeof j.source === 'string' ? j.source : '' } : null;
+/** The companion's `GET /mode` reply, or null when it isn't a valid one. `end`: when a meeting ends (ms). */
+export function parseContext(json: unknown): { mode: ContextMode; source: string; end?: number } | null {
+  const j = json as { mode?: unknown; source?: unknown; end?: unknown } | null;
+  if (!j || !isMode(j.mode)) return null;
+  return {
+    mode: j.mode,
+    source: typeof j.source === 'string' ? j.source : '',
+    ...(typeof j.end === 'number' && Number.isFinite(j.end) ? { end: j.end } : {}),
+  };
 }
