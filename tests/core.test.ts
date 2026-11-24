@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatAiTokens, formatClock, formatTokens, statusLine } from '../src/core/format';
+import { formatAiTokens, formatClock, formatTokens, mediaLine, statusLine } from '../src/core/format';
 import { parseContext } from '../src/core/modes';
 import { PcmBuffer, pcmLevel, pcmToWav } from '../src/core/pcm';
 import { replyPages } from '../src/core/reply';
@@ -99,6 +99,21 @@ describe('modes', () => {
     expect(parseContext({ mode: 'flying' })).toBeNull();
     expect(parseContext(null)).toBeNull();
     expect(parseContext({ mode: 'toString' })).toBeNull();
+  });
+
+  it('keeps valid media and drops malformed fields', () => {
+    const c = parseContext({ mode: 'assistant', media: { title: '밤양갱', artist: '비비', app: 'YouTube Music', pos: 83_000, dur: -1 } });
+    expect(c?.media).toEqual({ title: '밤양갱', artist: '비비', app: 'YouTube Music', pos: 83_000, dur: undefined });
+    expect(parseContext({ mode: 'assistant', media: { title: '' } })?.media).toBeUndefined();
+    expect(parseContext({ mode: 'assistant', media: 'x' })?.media).toBeUndefined();
+  });
+
+  it('formats the now-playing line and cuts long titles', () => {
+    expect(mediaLine({ title: '밤양갱', artist: '비비', app: 'YouTube Music', pos: 83_000, dur: 225_000 }, 560)).toBe('YouTube Music · 밤양갱 - 비비  1:23/3:45');
+    const long = mediaLine({ title: '아주 '.repeat(40), pos: 0, dur: 60_000 }, 560);
+    expect(long.endsWith('…  0:00/1:00')).toBe(true);
+    expect(textWidth(long)).toBeLessThanOrEqual(560);
+    expect(mediaLine(undefined, 560)).toBe('');
   });
 });
 

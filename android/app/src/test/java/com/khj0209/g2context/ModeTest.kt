@@ -27,3 +27,14 @@ class ModeTest {
         assertEquals(null, Mode.of("auto"))
     }
 }
+
+class PairingTest {
+    @Test
+    fun acceptsOnlyTheExactKey() {
+        assertEquals(true, hasPairingKey("/mode?key=ABCD2345", "ABCD2345"))
+        assertEquals(true, hasPairingKey("/mode?x=1&key=ABCD2345", "ABCD2345"))
+        assertEquals(false, hasPairingKey("/mode?key=ABCD234", "ABCD2345"))
+        assertEquals(false, hasPairingKey("/mode", "ABCD2345"))
+        assertEquals(false, hasPairingKey("/mode?key=", "ABCD2345"))
+    }
+}

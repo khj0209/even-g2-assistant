@@ -7,14 +7,14 @@ import {
   type EvenAppBridge,
   type EvenHubEvent,
 } from '@evenrealities/even_hub_sdk';
-import { statusLine } from './core/format';
-import { MODES, type ContextMode } from './core/modes';
-import { addFix, dashboard, emptyTrack, REST_MS, type Track } from './core/dashboard';
+import { mediaLine, statusLine } from './core/format';
+import { MODES, type ContextMode, type Media } from './core/modes';
+import { addFix, dashboard, emptyTrack, REST_MS, type Dash, type Track } from './core/dashboard';
 import { replyPages } from './core/reply';
 import { DEFAULT_SETTINGS, type DeviceState, type Mood, type Settings, type TempRange } from './core/types';
 import { addUsage, emptyUsage, parseUsage, rollUsage, totalTokens, type UsageState } from './core/usage';
 import { GlassesSink } from './glasses/glassesSink';
-import { REPLY } from './glasses/layout';
+import { REPLY, SCREEN } from './glasses/layout';
 import { Renderer, type Sink } from './glasses/renderer';
 import type { SecretStore } from './platform/secrets';
 import type { KV } from './platform/storage';
@@ -70,6 +70,8 @@ export class Assistant {
   companion = false;
   /** Why the last poll failed, for the phone screen. */
   companionError = '';
+  /** What's playing on the phone, from the companion (needs the pairing code). */
+  media: Media | undefined;
   /** Dashboard state for the current mode. */
   private modeSince = Date.now();
   private track: Track = emptyTrack();
@@ -160,13 +162,14 @@ export class Assistant {
 
   /** Follows the companion app (setting 'auto') or the mode fixed on the phone. */
   async refreshMode(): Promise<void> {
-    const r = await fetchContext();
+    const r = await fetchContext(this.settings.companionKey);
     const ctx = 'error' in r ? null : r;
     this.companion = !!ctx;
     this.companionError = 'error' in r ? r.error : '';
     const fixed = this.settings.mode;
     const next = fixed !== 'auto' ? fixed : (ctx?.mode ?? 'assistant');
     this.meetingEnd = ctx?.end;
+    this.media = ctx?.media;
     if (next === this.mode) return this.render();
     this.mode = next;
     this.modeSince = Date.now();
@@ -195,7 +198,7 @@ export class Assistant {
   }
 
   /** The mode's dashboard, shown while idle once the last answer has been up for a while. */
-  private dashboardText(): string | null {
+  private dashboardView(): Dash | null {
     if (this.stage !== 'idle' || Date.now() - this.replyAt < ANSWER_HOLD_MS) return null;
     return dashboard(
       { mode: this.mode, since: this.modeSince, track: this.track, sets: this.sets, restUntil: this.restUntil, meetingEnd: this.meetingEnd },
@@ -269,11 +272,11 @@ export class Assistant {
         break;
       case OsEventTypeList.CLICK_EVENT:
         if (this.stage === 'listening') void this.stopListening();
-        else if (this.stage === 'idle' && this.dashboardText() && this.mode === 'workout') {
+        else if (this.stage === 'idle' && this.dashboardView() && this.mode === 'workout') {
           this.sets++;
           this.restUntil = Date.now() + REST_MS;
           this.render();
-        } else if (this.stage === 'idle' && this.dashboardText()) {
+        } else if (this.stage === 'idle' && this.dashboardView()) {
           this.replyAt = Date.now(); // tap on a dashboard brings the last answer back
           this.render();
         } else if (this.stage === 'idle') this.turnPage(1, true);
@@ -470,6 +473,7 @@ export class Assistant {
   }
 
   render(): void {
+    const dash = this.dashboardView();
     this.renderer.render({
       status: statusLine({
         mode: MODES[this.mode].label,
@@ -482,7 +486,10 @@ export class Assistant {
       mood: this.mood,
       frame: this.frame,
       petName: PET_NAME,
-      reply: this.dashboardText() ?? this.pages[this.page] ?? '',
+      media: mediaLine(this.media, SCREEN.w - 16),
+      hero: dash && { big: dash.big, caption: dash.caption },
+      detail: dash?.detail ?? '',
+      reply: dash ? '' : (this.pages[this.page] ?? ''),
     });
     for (const cb of this.listeners) cb();
   }

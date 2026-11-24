@@ -121,9 +121,11 @@ class ContextService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         val cors = "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Private-Network: true\r\n" +
             "Access-Control-Allow-Methods: GET\r\nAccess-Control-Allow-Headers: *\r\n"
         val (mode, source) = current
-        // Any app on the phone can read this, so it carries no calendar details beyond the end time.
+        // Any app on the phone can read this, so it carries no calendar details beyond the end time,
+        // and what's playing only for a request with the pairing code shown in this app.
         val json = JSONObject().put("mode", mode.id).put("label", mode.label).put("source", source)
         meetingEndsAt?.let { if (mode == Mode.MEETING) json.put("end", it) }
+        if (hasPairingKey(request.split(' ').getOrElse(1) { "" }, pairingCode(this))) currentMedia(this)?.let { json.put("media", it) }
         val body = json.toString().toByteArray()
         val head = when {
             request.startsWith("OPTIONS ") -> "HTTP/1.1 204 No Content\r\n$cors"

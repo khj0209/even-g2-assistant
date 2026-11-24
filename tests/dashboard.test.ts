@@ -27,32 +27,34 @@ describe('formatting', () => {
 });
 
 describe('dashboard', () => {
-  it('shows running time, distance and pace', () => {
-    const text = dashboard({ ...base, track: { distance: 2000, last: null, speed: 1000 / 300 } }, 600_000)!;
-    expect(text).toContain('러닝  10:00');
-    expect(text).toContain('2.00 km');
-    expect(text).toContain(`평균 페이스  5'00"`);
-    expect(text).toContain(`현재 페이스  5'00"`);
+  it('shows current pace big, with time, distance and average below', () => {
+    const d = dashboard({ ...base, track: { distance: 2000, last: null, speed: 1000 / 300 } }, 600_000)!;
+    expect(d.big).toBe(`5'00"`);
+    expect(d.detail).toContain('시간 10:00');
+    expect(d.detail).toContain('거리 2.00km');
+    expect(d.detail).toContain(`평균 5'00"`);
   });
 
   it('shows speed while driving', () => {
-    expect(dashboard({ ...base, mode: 'driving', track: { distance: 0, last: null, speed: 25 } }, 0)).toContain('90 km/h');
+    expect(dashboard({ ...base, mode: 'driving', track: { distance: 0, last: null, speed: 25 } }, 0)).toMatchObject({ big: '90', caption: 'km/h' });
+    expect(dashboard({ ...base, mode: 'driving' }, 0)!.big).toBe('--');
   });
 
   it('counts workout sets and rest', () => {
-    expect(dashboard({ ...base, mode: 'workout', sets: 3, restUntil: REST_MS }, 30_000)).toContain('휴식  1:00');
-    expect(dashboard({ ...base, mode: 'workout', sets: 3, restUntil: 0 }, 30_000)).toContain('탭하면 세트 완료');
+    expect(dashboard({ ...base, mode: 'workout', sets: 3, restUntil: REST_MS }, 30_000)).toMatchObject({ big: '1:00', caption: '휴식 · 3세트 완료' });
+    expect(dashboard({ ...base, mode: 'workout', sets: 3, restUntil: 0 }, 30_000)!.big).toBe('3세트');
   });
 
   it('cycles focus and break in dev mode', () => {
-    expect(dashboard({ ...base, mode: 'dev' }, 60_000)).toContain('집중 1회차  24:00 남음');
-    expect(dashboard({ ...base, mode: 'dev' }, 26 * 60_000)).toContain('쉬는 시간  4:00 남음');
-    expect(dashboard({ ...base, mode: 'dev' }, 31 * 60_000)).toContain('집중 2회차');
+    expect(dashboard({ ...base, mode: 'dev' }, 60_000)).toMatchObject({ big: '24:00', caption: '집중 1회차' });
+    expect(dashboard({ ...base, mode: 'dev' }, 26 * 60_000)).toMatchObject({ big: '4:00', caption: '쉬는 시간' });
+    expect(dashboard({ ...base, mode: 'dev' }, 31 * 60_000)!.caption).toBe('집중 2회차');
   });
 
-  it('shows when the meeting ends, and nothing for the plain assistant', () => {
+  it('shows minutes left in a meeting, and nothing for the plain assistant', () => {
     const end = new Date(2026, 10, 24, 14, 30).getTime();
-    expect(dashboard({ ...base, mode: 'meeting', since: end - 30 * 60_000, meetingEnd: end }, end - 12 * 60_000)).toContain('14:30까지 · 12분 남음');
+    expect(dashboard({ ...base, mode: 'meeting', since: end - 30 * 60_000, meetingEnd: end }, end - 12 * 60_000)).toMatchObject({ big: '12분', caption: '14:30까지' });
+    expect(dashboard({ ...base, mode: 'meeting', since: 0 }, 90_000)).toMatchObject({ big: '1:30', caption: '회의 경과' });
     expect(dashboard({ ...base, mode: 'assistant' }, 0)).toBeNull();
   });
 });

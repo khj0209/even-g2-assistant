@@ -2,7 +2,7 @@ import { validateEvenHubPageContainer } from '@evenrealities/even_hub_sdk';
 import { describe, expect, it } from 'vitest';
 import type { Mood } from '../src/core/types';
 import { pageFields } from '../src/glasses/glassesSink';
-import { LAYOUT, PET, REPLY, SCREEN } from '../src/glasses/layout';
+import { HERO, LAYOUT, PET, REPLY, SCREEN } from '../src/glasses/layout';
 import { petKey } from '../src/glasses/renderer';
 import { PALETTE, petLabel, SPRITE_SIZE, spriteGrid } from '../src/glasses/sprite';
 
@@ -14,7 +14,7 @@ describe('layout', () => {
   });
 
   it('fits the screen, uses contiguous ids and exactly one event-capturing box', () => {
-    expect(LAYOUT.map((b) => b.id)).toEqual([1, 2, 3]);
+    expect(LAYOUT.map((b) => b.id)).toEqual([1, 2, 3, 4, 5, 6]);
     expect(LAYOUT.filter((b) => b.capture)).toHaveLength(1);
     for (const b of LAYOUT) {
       expect(b.x + b.w).toBeLessThanOrEqual(SCREEN.w);
@@ -26,10 +26,17 @@ describe('layout', () => {
     }
   });
 
-  it('keeps the sprite and its label inside the pet image', () => {
+  it('keeps the sprite and its label inside the pet image, clear of the text', () => {
     expect(PET.spriteX + SPRITE_SIZE * PET.scale).toBeLessThanOrEqual(PET.w);
     expect(SPRITE_SIZE * PET.scale).toBeLessThanOrEqual(PET.labelY);
+    expect(PET.x + PET.w).toBeLessThanOrEqual(REPLY.x);
     expect(REPLY.textWidth).toBeLessThan(REPLY.w);
+  });
+
+  it('puts the big-number image inside the reply area', () => {
+    expect(HERO.x).toBeGreaterThanOrEqual(REPLY.x);
+    expect(HERO.x + HERO.w).toBeLessThanOrEqual(REPLY.x + REPLY.w);
+    expect(HERO.y).toBeGreaterThanOrEqual(REPLY.y);
   });
 });
 

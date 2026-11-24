@@ -1,6 +1,6 @@
 import { OsEventTypeList } from '@evenrealities/even_hub_sdk';
 import { Assistant } from './app';
-import { formatTokens } from './core/format';
+import { formatTokens, mediaLine } from './core/format';
 import { MODES, type ContextMode } from './core/modes';
 import { MODELS, type SttMode } from './core/types';
 import { connectBridge } from './platform/bridge';
@@ -135,10 +135,17 @@ async function main(): Promise<void> {
   $('usage-reset').onclick = () => confirm('이번 달 토큰 사용량 기록을 초기화할까요?') && void app.resetUsage();
 
   // ------------------------------------------------------------ situation mode
-  const modeSelect = $<HTMLSelectElement>('mode');
-  for (const [id, m] of Object.entries(MODES)) modeSelect.append(el('option', { value: id, textContent: `${m.label} (고정)` }));
-  modeSelect.value = app.settings.mode;
-  modeSelect.onchange = () => void app.saveSettings({ mode: modeSelect.value as ContextMode | 'auto' });
+  // "자동" follows G2 Context; any other chip fixes that mode.
+  const chips = [['auto', '자동'] as const, ...Object.entries(MODES).map(([id, m]) => [id, m.label] as const)].map(([id, label]) => {
+    const chip = el('button', { type: 'button', textContent: label });
+    chip.setAttribute('aria-pressed', 'false');
+    chip.onclick = () => void app.saveSettings({ mode: id as ContextMode | 'auto' });
+    return [id, chip] as const;
+  });
+  $('mode').replaceChildren(...chips.map(([, c]) => c));
+  const companionKey = $<HTMLInputElement>('companion-key');
+  companionKey.value = app.settings.companionKey;
+  companionKey.onchange = () => void app.saveSettings({ companionKey: companionKey.value.trim().toUpperCase() });
 
   // ------------------------------------------------------------ sessions
   let agents: AgentSessionInfo[] = [];
@@ -225,7 +232,11 @@ async function main(): Promise<void> {
       g.className = `pill ${app.device.connected ? 'ok' : 'bad'}`;
     }
     ptt.classList.toggle('active', app.stage === 'listening');
-    $('companion-state').textContent = app.companion ? `연결됨 · 지금 ${MODES[app.mode].label}` : `연결 안 됨 — ${app.companionError}`;
+    $('now-mode').textContent = MODES[app.mode].label;
+    $('companion-state').textContent =
+      app.settings.mode !== 'auto' ? '고정됨' : app.companion ? 'G2 Context 연결됨' : `G2 Context 연결 안 됨 — ${app.companionError}`;
+    for (const [id, chip] of chips) chip.setAttribute('aria-pressed', String(app.settings.mode === id));
+    $('now-media').textContent = app.media ? mediaLine(app.media, 10_000) : '';
     say($('notice'), app.notice, !!app.notice);
     const u = app.usage;
     $('usage').textContent =

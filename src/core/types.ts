@@ -21,6 +21,8 @@ export interface Settings {
   model: string;
   /** 'auto' follows the Android companion app; otherwise this mode is fixed. */
   mode: ContextMode | 'auto';
+  /** Pairing code shown in G2 Context; lets the glasses read what's playing. */
+  companionKey: string;
   /** Monthly token budget for the "AI 잔여" readout; 0 = just show tokens used. */
   monthlyBudget: number;
   stt: SttMode;
@@ -38,6 +40,7 @@ export const DEFAULT_SETTINGS: Settings = {
   model: 'claude-opus-5-5',
   monthlyBudget: 1_000_000,
   mode: 'auto',
+  companionKey: '',
   stt: 'auto',
   sttModel: 'gpt-4o-mini-transcribe',
 };

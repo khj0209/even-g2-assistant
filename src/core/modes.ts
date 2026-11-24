@@ -28,13 +28,37 @@ export const MODES: Record<ContextMode, { label: string; hint: string }> = {
 
 export const isMode = (v: unknown): v is ContextMode => typeof v === 'string' && Object.hasOwn(MODES, v);
 
-/** The companion's `GET /mode` reply, or null when it isn't a valid one. `end`: when a meeting ends (ms). */
-export function parseContext(json: unknown): { mode: ContextMode; source: string; end?: number } | null {
-  const j = json as { mode?: unknown; source?: unknown; end?: unknown } | null;
+/** What's playing on the phone. Positions in ms. */
+export interface Media {
+  title: string;
+  artist?: string;
+  app?: string;
+  pos?: number;
+  dur?: number;
+}
+
+export interface Context {
+  mode: ContextMode;
+  source: string;
+  /** When the current meeting ends (ms). */
+  end?: number;
+  /** Only sent when the request carries the pairing code. */
+  media?: Media;
+}
+
+const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
+const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : undefined);
+
+/** The companion's `GET /mode` reply, or null when it isn't a valid one. Unknown or malformed fields are dropped. */
+export function parseContext(json: unknown): Context | null {
+  const j = json as { mode?: unknown; source?: unknown; end?: unknown; media?: Record<string, unknown> } | null;
   if (!j || !isMode(j.mode)) return null;
+  const m = j.media;
+  const title = str(m?.title);
   return {
     mode: j.mode,
-    source: typeof j.source === 'string' ? j.source : '',
-    ...(typeof j.end === 'number' && Number.isFinite(j.end) ? { end: j.end } : {}),
+    source: str(j.source) ?? '',
+    ...(num(j.end) != null ? { end: num(j.end) } : {}),
+    ...(title ? { media: { title, artist: str(m!.artist), app: str(m!.app), pos: num(m!.pos), dur: num(m!.dur) } } : {}),
   };
 }

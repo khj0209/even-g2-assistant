@@ -1,3 +1,5 @@
+import type { Media } from './modes';
+import { ellipsize, textWidth } from './textlayout';
 import type { DeviceState, TempRange } from './types';
 
 export function formatClock(d: Date): string {
@@ -45,4 +47,15 @@ export interface StatusParts {
 /** The single top line on the glasses: mode · battery · today's low/high · time · AI tokens left. */
 export function statusLine(p: StatusParts): string {
   return [`[${p.mode}]`, formatBattery(p.device), formatTemp(p.temp), formatClock(p.now), formatAiTokens(p.used, p.budget)].join('  ');
+}
+
+const mmss = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
+
+/** "YouTube Music · 제목 - 가수  1:23/3:45", cut to fit one line of `width` px. */
+export function mediaLine(m: Media | undefined, width: number): string {
+  if (!m) return '';
+  const name = [m.title, m.artist].filter(Boolean).join(' - ');
+  const time = m.pos != null && m.dur ? `  ${mmss(m.pos)}/${mmss(m.dur)}` : '';
+  const head = m.app ? `${m.app} · ` : '';
+  return ellipsize(head + name, width - textWidth(time)) + time;
 }
