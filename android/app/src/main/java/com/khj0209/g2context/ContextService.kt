@@ -14,6 +14,8 @@ import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import java.io.BufferedInputStream
+import java.io.DataInputStream
 import java.io.IOException
 import java.net.InetAddress
 import java.net.ServerSocket
@@ -44,15 +46,36 @@ class ContextService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             NotificationChannel(CHANNEL, "현재 상황", NotificationManager.IMPORTANCE_LOW),
         )
         current = compute()
-        val type = if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
-        ServiceCompat.startForeground(this, NOTIFICATION_ID, notification(), type)
+        goForeground()
         prefs(this).registerOnSharedPreferenceChangeListener(this)
         registerActivityUpdates(this)
         thread(name = "mode-server", isDaemon = true) { serve() }
         handler.post(tick)
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int) = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        goForeground() // again, so a microphone permission granted since then takes effect
+        return START_STICKY
+    }
+
+    /**
+     * Speech recognition for the glasses runs while the phone sits in a pocket, which Android only
+     * allows for a foreground service of the microphone type. That type can only be added when the
+     * permission is granted and the service was started from the foreground, so fall back without it.
+     */
+    private fun goForeground() {
+        val special = if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
+        val mic = if (Build.VERSION.SDK_INT >= 30 && granted(this, android.Manifest.permission.RECORD_AUDIO)) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        } else {
+            0
+        }
+        try {
+            ServiceCompat.startForeground(this, NOTIFICATION_ID, notification(), special or mic)
+        } catch (e: Exception) {
+            ServiceCompat.startForeground(this, NOTIFICATION_ID, notification(), special)
+        }
+    }
 
     override fun onDestroy() {
         handler.removeCallbacks(tick)
@@ -105,44 +128,93 @@ class ContextService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         prefs(this).edit().putString(KEY_SERVER, "실행 중 (127.0.0.1:$PORT)").apply()
         while (!socket.isClosed) {
             try {
-                socket.accept().use { respond(it) }
+                val client = socket.accept()
+                // One thread per request: speech recognition takes seconds and mode polls must not wait for it.
+                thread(name = "mode-request", isDaemon = true) {
+                    try {
+                        client.use { respond(it) }
+                    } catch (e: IOException) {
+                        // One bad client must not stop the server.
+                    }
+                }
             } catch (e: IOException) {
-                // One bad client must not stop the server.
+                // accept() failed; keep serving unless the socket was closed.
             }
         }
     }
 
     private fun respond(client: Socket) {
-        client.soTimeout = 2000
-        val reader = client.getInputStream().bufferedReader()
-        val request = reader.readLine() ?: return
-        while (!reader.readLine().isNullOrEmpty()) Unit // skip headers
-        // The glasses page isn't served from localhost, so allow CORS and Chrome's private-network preflight.
-        val cors = "Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Private-Network: true\r\n" +
-            "Access-Control-Allow-Methods: GET\r\nAccess-Control-Allow-Headers: *\r\n"
-        val (mode, source) = current
-        // Any app on the phone can read this, so it carries no calendar details beyond the end time,
-        // and what's playing only for a request with the pairing code shown in this app.
-        val json = JSONObject().put("mode", mode.id).put("label", mode.label).put("source", source)
-        meetingEndsAt?.let { if (mode == Mode.MEETING) json.put("end", it) }
-        if (hasPairingKey(request.split(' ').getOrElse(1) { "" }, pairingCode(this))) currentMedia(this)?.let { json.put("media", it) }
-        val body = json.toString().toByteArray()
-        val head = when {
-            request.startsWith("OPTIONS ") -> "HTTP/1.1 204 No Content\r\n$cors"
-            request.startsWith("GET /mode") ->
-                "HTTP/1.1 200 OK\r\n${cors}Content-Type: application/json; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: ${body.size}\r\n"
-            else -> "HTTP/1.1 404 Not Found\r\n${cors}Content-Length: 0\r\n"
+        client.soTimeout = 5000
+        val input = BufferedInputStream(client.getInputStream())
+        val request = readLine(input) ?: return
+        var length = 0
+        while (true) {
+            val h = readLine(input) ?: return
+            if (h.isEmpty()) break
+            if (h.startsWith("content-length:", ignoreCase = true)) length = h.substringAfter(':').trim().toIntOrNull() ?: 0
         }
+        val target = request.split(' ').getOrElse(1) { "" }
+        // Any app on the phone can call this server. Without the pairing code shown in this app it only
+        // gets the mode (and a meeting's end time); the Claude key, what's playing and speech recognition need the code.
+        val paired = hasPairingKey(target, pairingCode(this))
+        val (status, json) = when {
+            request.startsWith("OPTIONS ") -> "204 No Content" to null
+            request.startsWith("GET /mode") -> "200 OK" to modeJson(paired)
+            request.startsWith("POST /stt") -> stt(input, length, paired)
+            else -> "404 Not Found" to null
+        }
+        val body = json?.toString()?.toByteArray() ?: ByteArray(0)
+        // The glasses page isn't served from localhost, so allow CORS and Chrome's private-network preflight.
+        val head = "HTTP/1.1 $status\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Private-Network: true\r\n" +
+            "Access-Control-Allow-Methods: GET, POST\r\nAccess-Control-Allow-Headers: *\r\n" +
+            "Content-Type: application/json; charset=utf-8\r\nCache-Control: no-store\r\n" +
+            "Content-Length: ${body.size}\r\nConnection: close\r\n\r\n"
         val out = client.getOutputStream()
-        out.write("${head}Connection: close\r\n\r\n".toByteArray())
-        if (request.startsWith("GET /mode")) out.write(body)
+        out.write(head.toByteArray())
+        out.write(body)
         out.flush()
         val p = prefs(this)
         p.edit().putInt(KEY_SERVED, p.getInt(KEY_SERVED, 0) + 1).putLong(KEY_SERVED_AT, System.currentTimeMillis()).apply()
     }
 
+    private fun modeJson(paired: Boolean): JSONObject {
+        val (mode, source) = current
+        val json = JSONObject().put("mode", mode.id).put("label", mode.label).put("source", source)
+        meetingEndsAt?.let { if (mode == Mode.MEETING) json.put("end", it) }
+        if (paired) {
+            currentMedia(this)?.let { json.put("media", it) }
+            claudeKey(this)?.let { json.put("claudeKey", it) }
+        }
+        return json
+    }
+
+    private fun stt(input: BufferedInputStream, length: Int, paired: Boolean): Pair<String, JSONObject> {
+        if (!paired) return "403 Forbidden" to JSONObject().put("error", "연결 코드가 G2 Context와 달라요")
+        if (length <= 0 || length > MAX_PCM) return "413 Payload Too Large" to JSONObject().put("error", "녹음이 너무 길어요")
+        val pcm = ByteArray(length)
+        DataInputStream(input).readFully(pcm)
+        return try {
+            "200 OK" to JSONObject().put("text", transcribe(this, pcm))
+        } catch (e: IOException) {
+            "503 Service Unavailable" to JSONObject().put("error", e.message)
+        }
+    }
+
+    /** One header line, without its CRLF; null at end of stream. Headers are ASCII, the body is read raw. */
+    private fun readLine(input: BufferedInputStream): String? {
+        val sb = StringBuilder()
+        while (true) {
+            val c = input.read()
+            if (c < 0) return if (sb.isEmpty()) null else sb.toString()
+            if (c == '\n'.code) return sb.toString().trimEnd('\r')
+            sb.append(c.toChar())
+        }
+    }
+
     companion object {
         const val PORT = 8765
+        /** A minute of 16 kHz 16-bit mono audio, plus slack. */
+        private const val MAX_PCM = 2_000_000
         private const val CHANNEL = "context"
         private const val NOTIFICATION_ID = 1
     }

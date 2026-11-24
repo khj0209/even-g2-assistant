@@ -16,20 +16,12 @@ import { addUsage, emptyUsage, parseUsage, rollUsage, totalTokens, type UsageSta
 import { GlassesSink } from './glasses/glassesSink';
 import { POPUP, SCREEN } from './glasses/layout';
 import { Renderer, type Sink } from './glasses/renderer';
-import type { SecretStore } from './platform/secrets';
 import type { KV } from './platform/storage';
 import { askClaude, describeError, makeClient } from './services/claude';
 import { askAgent, appendTurn, listAgentSessions, SessionStore, type AgentSessionInfo } from './services/sessions';
-import {
-  chooseStt,
-  GlassesMicRecognizer,
-  PhoneSpeechRecognizer,
-  phoneSpeechSupported,
-  SttUnavailableError,
-  type Recognizer,
-} from './services/stt';
+import { GlassesMicRecognizer, SttUnavailableError } from './services/stt';
 import { DEFAULT_LOCATION, fetchTodayRange, type GeoPoint } from './services/weather';
-import { fetchContext } from './services/context';
+import { fetchContext, transcribe } from './services/context';
 
 type Stage = 'idle' | 'listening' | 'transcribing' | 'answering';
 
@@ -37,6 +29,7 @@ const TICK_MS = 1000;
 const WEATHER_TTL = 30 * 60_000;
 const MAX_LISTEN_MS = 60_000;
 const CONTEXT_POLL_MS = 5000;
+const NO_KEY = 'G2 Context 앱에서 Claude API 키를 등록하고, 이 화면 설정에 연결 코드를 넣어 주세요.';
 /** How long the conversation popup stays open after the last answer or message. */
 const ANSWER_HOLD_MS = 20_000;
 const GPS_MODES = new Set<ContextMode>(['running', 'driving']);
@@ -46,7 +39,6 @@ const DEDUPE_MS = 150;
 export interface AppDeps {
   bridge: EvenAppBridge | null;
   kv: KV;
-  secrets: SecretStore;
 }
 
 /** Everything the assistant does, shared by the glasses and the phone screen. */
@@ -69,6 +61,8 @@ export class Assistant {
   companion = false;
   /** Why the last poll failed, for the phone screen. */
   companionError = '';
+  /** The Claude key from G2 Context (needs the pairing code). Memory only. */
+  claudeKey: string | undefined;
   /** What's playing on the phone, from the companion (needs the pairing code). */
   media: Media | undefined;
   /** Dashboard state for the current mode. */
@@ -83,7 +77,7 @@ export class Assistant {
 
   private glasses: GlassesSink | null = null;
   private glassesMic: GlassesMicRecognizer | null = null;
-  private recognizer: Recognizer | null = null;
+  private recognizer: GlassesMicRecognizer | null = null;
   private abort: AbortController | null = null;
   private listenTimer: ReturnType<typeof setTimeout> | null = null;
   private clients = new Map<string, Anthropic>();
@@ -114,7 +108,7 @@ export class Assistant {
     if (bridge) {
       this.glasses = new GlassesSink(bridge);
       this.renderer.addSink(this.glasses);
-      this.glassesMic = new GlassesMicRecognizer(bridge, () => this.deps.secrets.get('openai'), this.settings.sttModel);
+      this.glassesMic = new GlassesMicRecognizer(bridge, (pcm) => transcribe(pcm, this.settings.companionKey));
       bridge.onEvenHubEvent((e) => this.onGlassesEvent(e));
       bridge.onDeviceStatusChanged((s) => this.onDevice(s));
       bridge.onAppLocationChanged((l) => {
@@ -149,22 +143,24 @@ export class Assistant {
   async saveSettings(patch: Partial<Settings>): Promise<void> {
     this.settings = { ...this.settings, ...patch };
     await this.deps.kv.set('settings', JSON.stringify(this.settings));
-    if (patch.mode) void this.refreshMode();
-    if (this.deps.bridge && patch.sttModel) {
-      this.glassesMic = new GlassesMicRecognizer(this.deps.bridge, () => this.deps.secrets.get('openai'), this.settings.sttModel);
-    }
+    if (patch.companionKey != null) void this.refreshMode();
     this.render();
   }
 
-  /** Follows the companion app (setting 'auto') or the mode fixed on the phone. */
+  /** Follows the G2 Context app: mode, meeting end, what's playing and the Claude key. */
   async refreshMode(): Promise<void> {
     const r = await fetchContext(this.settings.companionKey);
     const ctx = 'error' in r ? null : r;
     this.companion = !!ctx;
     this.companionError = 'error' in r ? r.error : '';
-    const fixed = this.settings.mode;
-    const next = fixed !== 'auto' ? fixed : (ctx?.mode ?? 'assistant');
+    const next = ctx?.mode ?? 'assistant';
     this.meetingEnd = ctx?.end;
+    // Kept in memory only; it disappears when G2 Context removes it or stops answering.
+    if (ctx?.claudeKey !== this.claudeKey) {
+      const hadKey = !!this.claudeKey;
+      this.claudeKey = ctx?.claudeKey;
+      if (!hadKey && this.claudeKey && this.stage === 'idle') this.closePopup(); // drop the "register a key" message
+    }
     this.media = ctx?.media;
     if (next === this.mode) return this.render();
     this.mode = next;
@@ -216,15 +212,8 @@ export class Assistant {
     return totalTokens(rollUsage(this.usage, new Date()));
   }
 
-  /** Called by the phone after the Claude key changed. */
-  async keyChanged(): Promise<void> {
-    this.clients.clear();
-    if (this.stage === 'idle') await this.showWelcome();
-    this.render();
-  }
-
   async client(): Promise<Anthropic | null> {
-    const key = await this.deps.secrets.get('anthropic');
+    const key = this.claudeKey;
     if (!key) return null;
     let c = this.clients.get(key);
     if (!c) {
@@ -237,7 +226,7 @@ export class Assistant {
 
   async listAgentSessions(): Promise<AgentSessionInfo[]> {
     const c = await this.client();
-    if (!c) throw new Error('먼저 Claude API 키를 등록해 주세요.');
+    if (!c) throw new Error(NO_KEY);
     return listAgentSessions(c);
   }
 
@@ -316,16 +305,10 @@ export class Assistant {
 
   async startListening(): Promise<void> {
     if (this.stage !== 'idle') return;
-    const hasKey = !!(await this.deps.secrets.get('anthropic'));
-    if (!hasKey) return this.fail('휴대폰 화면에서 Claude API 키를 먼저 등록해 주세요.');
-    const choice = chooseStt(this.settings.stt, {
-      hasGlassesMic: !!this.glassesMic,
-      hasOpenAIKey: !!(await this.deps.secrets.get('openai')),
-      phoneSpeech: phoneSpeechSupported(),
-    });
-    if (choice.kind === 'none') return this.fail(choice.reason);
-    this.recognizer = choice.kind === 'glasses' ? this.glassesMic! : new PhoneSpeechRecognizer();
-    if (choice.kind === 'glasses') await this.glasses?.ready;
+    if (!this.claudeKey) return this.fail(NO_KEY);
+    if (!this.glassesMic) return this.fail('안경을 길게 눌러 말할 수 있어요. 휴대폰에서는 글로 물어보세요.');
+    this.recognizer = this.glassesMic;
+    await this.glasses?.ready;
     this.stage = 'listening';
     this.resetReply('말씀하세요…');
     this.render();
@@ -445,7 +428,9 @@ export class Assistant {
 
   /** Opens the popup with setup help until the Claude key is entered. */
   private async showWelcome(): Promise<void> {
-    if (!(await this.deps.secrets.get('anthropic'))) this.resetReply('휴대폰 화면에서 Claude API 키를 등록해 주세요.');
+    // The key arrives with the first G2 Context poll; give it a moment before asking for it.
+    await this.refreshMode();
+    if (!this.claudeKey) this.resetReply(NO_KEY);
   }
 
   private tick(): void {

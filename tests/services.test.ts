@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { looksLikeAnthropicKey, looksLikeOpenAIKey, maskKey, SecretStore } from '../src/platform/secrets';
+import { looksLikeAnthropicKey, maskKey } from '../src/platform/secrets';
 import { memoryKV } from '../src/platform/storage';
 import { appendTurn, MAX_TURNS, newSession, SessionStore, titleFrom } from '../src/services/sessions';
-import { chooseStt } from '../src/services/stt';
 import { forecastUrl, parseForecast } from '../src/services/weather';
 
 describe('secrets', () => {
@@ -16,18 +15,6 @@ describe('secrets', () => {
     expect(looksLikeAnthropicKey('sk-ant-api03-abcdefghijklmnopqrstuvwxyz')).toBe(true);
     expect(looksLikeAnthropicKey('sk-proj-abcdefghijklmnopqrstuvwxyz')).toBe(false);
     expect(looksLikeAnthropicKey('sk-ant-has spaces in it abcdefghijkl')).toBe(false);
-    expect(looksLikeOpenAIKey('sk-proj-abcdefghijklmnopqrstuvwxyz')).toBe(true);
-  });
-
-  it('keeps secrets in memory only when encrypted storage is unavailable', async () => {
-    const kv = memoryKV();
-    const store = new SecretStore(kv); // no IndexedDB in Node
-    expect(store.persistent).toBe(false);
-    await store.set('anthropic', '  sk-ant-test-value  ');
-    expect(await store.get('anthropic')).toBe('sk-ant-test-value');
-    expect(await kv.get('secret:anthropic')).toBeNull();
-    await store.remove('anthropic');
-    expect(await store.get('anthropic')).toBeNull();
   });
 });
 
@@ -65,20 +52,6 @@ describe('sessions', () => {
     await b.remove(s.id);
     expect(b.active.kind).toBe('local');
     expect(b.current()).not.toBeNull();
-  });
-});
-
-describe('speech recognition choice', () => {
-  const base = { hasGlassesMic: true, hasOpenAIKey: true, phoneSpeech: true };
-  it('prefers the glasses microphone when an OpenAI key is set', () => {
-    expect(chooseStt('auto', base)).toEqual({ kind: 'glasses' });
-    expect(chooseStt('auto', { ...base, hasOpenAIKey: false })).toEqual({ kind: 'phone' });
-    expect(chooseStt('auto', { hasGlassesMic: false, hasOpenAIKey: false, phoneSpeech: false }).kind).toBe('none');
-  });
-  it('honours an explicit choice', () => {
-    expect(chooseStt('phone', base)).toEqual({ kind: 'phone' });
-    expect(chooseStt('openai', { ...base, hasOpenAIKey: false }).kind).toBe('none');
-    expect(chooseStt('phone', { ...base, phoneSpeech: false }).kind).toBe('none');
   });
 });
 

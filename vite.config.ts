@@ -1,7 +1,7 @@
 import { defineConfig, type Plugin } from 'vite';
 
 // Hosts the page may talk to. The API keys typed on the phone can only ever leave towards these.
-const CONNECT = ['https://api.anthropic.com', 'https://api.open-meteo.com', 'https://api.openai.com', 'http://127.0.0.1:8765', 'http://localhost:8765'];
+const CONNECT = ['https://api.anthropic.com', 'https://api.open-meteo.com', 'http://127.0.0.1:8765', 'http://localhost:8765'];
 
 /** Adds a strict Content-Security-Policy to the built page (not in dev, where Vite injects inline code). */
 function csp(): Plugin {

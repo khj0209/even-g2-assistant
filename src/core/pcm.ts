@@ -37,28 +37,6 @@ export class PcmBuffer {
   }
 }
 
-/** Wraps 16-bit mono PCM in a WAV header. */
-export function pcmToWav(pcm: Uint8Array, sampleRate = PCM_RATE): Uint8Array {
-  const out = new Uint8Array(44 + pcm.length);
-  const v = new DataView(out.buffer);
-  const ascii = (off: number, s: string) => [...s].forEach((c, i) => v.setUint8(off + i, c.charCodeAt(0)));
-  ascii(0, 'RIFF');
-  v.setUint32(4, 36 + pcm.length, true);
-  ascii(8, 'WAVE');
-  ascii(12, 'fmt ');
-  v.setUint32(16, 16, true); // fmt chunk size
-  v.setUint16(20, 1, true); // PCM
-  v.setUint16(22, 1, true); // mono
-  v.setUint32(24, sampleRate, true);
-  v.setUint32(28, sampleRate * PCM_BYTES_PER_SAMPLE, true);
-  v.setUint16(32, PCM_BYTES_PER_SAMPLE, true);
-  v.setUint16(34, 16, true);
-  ascii(36, 'data');
-  v.setUint32(40, pcm.length, true);
-  out.set(pcm, 44);
-  return out;
-}
-
 /** Root-mean-square level of 16-bit PCM, 0..1. Used to skip transcribing silence. */
 export function pcmLevel(pcm: Uint8Array): number {
   const n = Math.floor(pcm.length / 2);

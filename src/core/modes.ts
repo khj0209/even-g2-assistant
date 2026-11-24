@@ -1,3 +1,5 @@
+import { looksLikeAnthropicKey } from '../platform/secrets';
+
 // Situations the assistant adapts to. The Android companion app (G2 Context) detects them;
 // the ids are shared with it (android/app/src/main/java/com/khj0209/g2context/Mode.kt).
 export type ContextMode = 'assistant' | 'running' | 'workout' | 'driving' | 'dev' | 'meeting';
@@ -44,6 +46,8 @@ export interface Context {
   end?: number;
   /** Only sent when the request carries the pairing code. */
   media?: Media;
+  /** The Claude API key entered in G2 Context; only sent with the pairing code. */
+  claudeKey?: string;
 }
 
 const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
@@ -51,7 +55,7 @@ const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >=
 
 /** The companion's `GET /mode` reply, or null when it isn't a valid one. Unknown or malformed fields are dropped. */
 export function parseContext(json: unknown): Context | null {
-  const j = json as { mode?: unknown; source?: unknown; end?: unknown; media?: Record<string, unknown> } | null;
+  const j = json as { mode?: unknown; source?: unknown; end?: unknown; media?: Record<string, unknown>; claudeKey?: unknown } | null;
   if (!j || !isMode(j.mode)) return null;
   const m = j.media;
   const title = str(m?.title);
@@ -60,5 +64,6 @@ export function parseContext(json: unknown): Context | null {
     source: str(j.source) ?? '',
     ...(num(j.end) != null ? { end: num(j.end) } : {}),
     ...(title ? { media: { title, artist: str(m!.artist), app: str(m!.app), pos: num(m!.pos), dur: num(m!.dur) } } : {}),
+    ...(typeof j.claudeKey === 'string' && looksLikeAnthropicKey(j.claudeKey) ? { claudeKey: j.claudeKey.trim() } : {}),
   };
 }

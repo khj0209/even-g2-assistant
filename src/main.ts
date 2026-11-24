@@ -1,12 +1,12 @@
 import { OsEventTypeList } from '@evenrealities/even_hub_sdk';
 import { Assistant } from './app';
 import { formatTokens, mediaLine } from './core/format';
-import { MODES, type ContextMode } from './core/modes';
-import { MODELS, type SttMode } from './core/types';
+import { MODES } from './core/modes';
+import { MODELS } from './core/types';
 import { connectBridge } from './platform/bridge';
-import { looksLikeAnthropicKey, looksLikeOpenAIKey, maskKey, SecretStore } from './platform/secrets';
+import { maskKey } from './platform/secrets';
 import { browserKV, evenKV } from './platform/storage';
-import { describeError, makeClient, verifyKey } from './services/claude';
+import { describeError } from './services/claude';
 import { PreviewSink } from './glasses/previewSink';
 import type { AgentSessionInfo } from './services/sessions';
 
@@ -26,8 +26,7 @@ function say(target: HTMLElement, text: string, error = false): void {
 async function main(): Promise<void> {
   const bridge = await connectBridge();
   const kv = bridge ? evenKV(bridge) : browserKV();
-  const secrets = new SecretStore(kv);
-  const app = new Assistant({ bridge, kv, secrets });
+  const app = new Assistant({ bridge, kv });
   app.addSink(new PreviewSink($<HTMLCanvasElement>('mirror')));
   await app.init();
 
@@ -66,64 +65,6 @@ async function main(): Promise<void> {
     void app.ask(text);
   };
 
-  // ------------------------------------------------------------ Claude key
-  const keyInput = $<HTMLInputElement>('key-input');
-  const keyMessage = $('key-message');
-  const showKeyState = async () => {
-    const key = await secrets.get('anthropic');
-    $('key-state').textContent = key ? `등록됨 (${maskKey(key)})` : '미등록';
-    $('pill-key').className = `pill ${key ? 'ok' : 'bad'}`;
-    if (!secrets.persistent) say(keyMessage, '이 화면은 암호화 저장을 지원하지 않아, 키는 앱을 닫으면 지워집니다.', true);
-  };
-  $<HTMLFormElement>('key-form').onsubmit = async (e) => {
-    e.preventDefault();
-    const key = keyInput.value.trim();
-    if (!looksLikeAnthropicKey(key)) return say(keyMessage, 'Claude API 키는 sk-ant- 로 시작해요.', true);
-    say(keyMessage, '키 확인 중…');
-    try {
-      await verifyKey(makeClient(key));
-    } catch (err) {
-      return say(keyMessage, `저장하지 않았어요: ${describeError(err)}`, true);
-    }
-    await secrets.set('anthropic', key);
-    keyInput.value = '';
-    say(keyMessage, '확인하고 저장했어요.');
-    await showKeyState();
-    await app.keyChanged();
-  };
-  $('key-delete').onclick = async () => {
-    if (!confirm('이 휴대폰에 저장된 Claude API 키를 삭제할까요?')) return;
-    await secrets.remove('anthropic');
-    say(keyMessage, '삭제했어요.');
-    await showKeyState();
-    await app.keyChanged();
-  };
-
-  // ------------------------------------------------------------ speech recognition
-  const sttMode = $<HTMLSelectElement>('stt-mode');
-  sttMode.value = app.settings.stt;
-  sttMode.onchange = () => void app.saveSettings({ stt: sttMode.value as SttMode });
-  const sttModel = $<HTMLInputElement>('stt-model');
-  sttModel.value = app.settings.sttModel;
-  sttModel.onchange = () => sttModel.value.trim() && void app.saveSettings({ sttModel: sttModel.value.trim() });
-  const openaiInput = $<HTMLInputElement>('openai-input');
-  const showOpenAIState = async () => {
-    const key = await secrets.get('openai');
-    $('openai-state').textContent = key ? `OpenAI 키 등록됨 (${maskKey(key)})` : 'OpenAI 키 미등록';
-  };
-  $<HTMLFormElement>('openai-form').onsubmit = async (e) => {
-    e.preventDefault();
-    const key = openaiInput.value.trim();
-    if (!looksLikeOpenAIKey(key)) return say($('notice'), 'OpenAI 키는 sk- 로 시작해요.', true);
-    await secrets.set('openai', key);
-    openaiInput.value = '';
-    await showOpenAIState();
-  };
-  $('openai-delete').onclick = async () => {
-    await secrets.remove('openai');
-    await showOpenAIState();
-  };
-
   // ------------------------------------------------------------ model & tokens
   const model = $<HTMLSelectElement>('model');
   for (const m of MODELS) model.append(el('option', { value: m.id, textContent: m.label }));
@@ -134,15 +75,7 @@ async function main(): Promise<void> {
   budget.onchange = () => void app.saveSettings({ monthlyBudget: Math.max(0, Math.floor(Number(budget.value) || 0)) });
   $('usage-reset').onclick = () => confirm('이번 달 토큰 사용량 기록을 초기화할까요?') && void app.resetUsage();
 
-  // ------------------------------------------------------------ situation mode
-  // "자동" follows G2 Context; any other chip fixes that mode.
-  const chips = [['auto', '자동'] as const, ...Object.entries(MODES).map(([id, m]) => [id, m.label] as const)].map(([id, label]) => {
-    const chip = el('button', { type: 'button', textContent: label });
-    chip.setAttribute('aria-pressed', 'false');
-    chip.onclick = () => void app.saveSettings({ mode: id as ContextMode | 'auto' });
-    return [id, chip] as const;
-  });
-  $('mode').replaceChildren(...chips.map(([, c]) => c));
+  // ------------------------------------------------------------ G2 Context pairing (the mode itself is chosen in that app)
   const companionKey = $<HTMLInputElement>('companion-key');
   companionKey.value = app.settings.companionKey;
   companionKey.onchange = () => void app.saveSettings({ companionKey: companionKey.value.trim().toUpperCase() });
@@ -233,9 +166,11 @@ async function main(): Promise<void> {
     }
     ptt.classList.toggle('active', app.stage === 'listening');
     $('now-mode').textContent = MODES[app.mode].label;
-    $('companion-state').textContent =
-      app.settings.mode !== 'auto' ? '고정됨' : app.companion ? 'G2 Context 연결됨' : `G2 Context 연결 안 됨 — ${app.companionError}`;
-    for (const [id, chip] of chips) chip.setAttribute('aria-pressed', String(app.settings.mode === id));
+    $('companion-state').textContent = app.companion ? 'G2 Context 연결됨' : `G2 Context 연결 안 됨 — ${app.companionError}`;
+    $('key-state').textContent = app.claudeKey
+      ? `받음 (${maskKey(app.claudeKey)})`
+      : !app.companion ? 'G2 Context 연결 필요' : app.settings.companionKey ? 'G2 Context에 키가 없거나 연결 코드가 달라요' : '연결 코드를 입력하세요';
+    $('pill-key').className = `pill ${app.claudeKey ? 'ok' : 'bad'}`;
     $('now-media').textContent = app.media ? mediaLine(app.media, 10_000) : '';
     say($('notice'), app.notice, !!app.notice);
     const u = app.usage;
@@ -250,8 +185,6 @@ async function main(): Promise<void> {
     }
   });
 
-  await showKeyState();
-  await showOpenAIState();
   app.render();
 }
 

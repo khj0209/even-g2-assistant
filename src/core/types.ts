@@ -1,5 +1,3 @@
-import type { ContextMode } from './modes';
-
 export interface DeviceState {
   connected: boolean;
   /** 0..100, or null when unknown. */
@@ -13,19 +11,12 @@ export interface TempRange {
 }
 
 
-export type SttMode = 'auto' | 'openai' | 'phone';
-
 export interface Settings {
   model: string;
-  /** 'auto' follows the Android companion app; otherwise this mode is fixed. */
-  mode: ContextMode | 'auto';
-  /** Pairing code shown in G2 Context; lets the glasses read what's playing. */
+  /** Pairing code shown in G2 Context; lets the glasses get the Claude key and what's playing from it. */
   companionKey: string;
   /** Monthly token budget for the "AI 잔여" readout; 0 = just show tokens used. */
   monthlyBudget: number;
-  stt: SttMode;
-  /** OpenAI transcription model used with the glasses microphone. */
-  sttModel: string;
 }
 
 export const MODELS: { id: string; label: string }[] = [
@@ -37,8 +28,5 @@ export const MODELS: { id: string; label: string }[] = [
 export const DEFAULT_SETTINGS: Settings = {
   model: 'claude-opus-5-5',
   monthlyBudget: 1_000_000,
-  mode: 'auto',
   companionKey: '',
-  stt: 'auto',
-  sttModel: 'gpt-4o-mini-transcribe',
 };

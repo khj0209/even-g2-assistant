@@ -10,7 +10,9 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.View
+import android.text.InputType
 import android.widget.Button
+import android.widget.EditText
 import android.widget.GridLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -30,6 +32,7 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
     private lateinit var batteryButton: Button
     private lateinit var mediaButton: Button
     private lateinit var diagnostics: TextView
+    private lateinit var keyState: TextView
     private val modeButtons = mutableMapOf<Mode?, Button>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,7 +49,7 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
 
         setupTitle = heading("설정이 필요해요")
         root.addView(setupTitle)
-        permissionButton = button("움직임 · 캘린더 · 알림 권한 허용") { requestPermissions(PERMISSIONS, 1) }
+        permissionButton = button("마이크 · 움직임 · 캘린더 · 알림 권한 허용") { requestPermissions(PERMISSIONS, 1) }
         batteryButton = button("배터리 최적화 제외 (삼성 기기 필수)") {
             startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
         }
@@ -54,6 +57,31 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         }
         listOf(permissionButton, batteryButton, mediaButton).forEach(root::addView)
+
+        root.addView(heading("Claude API 키"))
+        keyState = text("", 15f)
+        root.addView(keyState)
+        val keyInput = EditText(this).apply {
+            hint = "sk-ant-…"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            isSingleLine = true
+        }
+        root.addView(keyInput)
+        root.addView(button("키 저장") {
+            val key = keyInput.text.toString().trim()
+            if (!looksLikeClaudeKey(key)) {
+                keyState.text = "Claude API 키는 sk-ant- 로 시작해요"
+                return@button
+            }
+            saveClaudeKey(this, key)
+            keyInput.text.clear()
+            update()
+        })
+        root.addView(button("키 삭제") {
+            saveClaudeKey(this, null)
+            update()
+        })
+        root.addView(text("키는 이 휴대폰의 Android 키 저장소로 암호화해 보관하고, 연결 코드를 넣은 안경 앱에만 넘겨줘요.", 13f, dim = true))
 
         root.addView(heading("안경 앱 연결 코드"))
         root.addView(text(pairingCode(this), 30f).apply {
@@ -113,6 +141,7 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
         val mode = Mode.of(p.getString(KEY_CURRENT, null)) ?: Mode.ASSISTANT
         val override = Mode.of(p.getString(KEY_OVERRIDE, null))
         modeView.text = "${mode.label} 모드"
+        keyState.text = claudeKey(this)?.let { "등록됨 (${maskClaudeKey(it)})" } ?: "미등록 — 아래에 입력하세요"
         reasonView.text = SOURCE_LABELS[p.getString(KEY_SOURCE, "default")] ?: ""
 
         // Setup steps disappear once done.
@@ -155,6 +184,7 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
 
     companion object {
         private val PERMISSIONS = arrayOf(
+            Manifest.permission.RECORD_AUDIO,
             Manifest.permission.ACTIVITY_RECOGNITION,
             Manifest.permission.READ_CALENDAR,
             Manifest.permission.POST_NOTIFICATIONS,

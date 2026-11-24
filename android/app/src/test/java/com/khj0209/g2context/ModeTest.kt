@@ -38,3 +38,13 @@ class PairingTest {
         assertEquals(false, hasPairingKey("/mode?key=", "ABCD2345"))
     }
 }
+
+class ClaudeKeyTest {
+    @Test
+    fun validatesAndMasks() {
+        assertEquals(true, looksLikeClaudeKey("sk-ant-api03-ABCDEFGHIJKLMNOPQRSTUV"))
+        assertEquals(false, looksLikeClaudeKey("sk-proj-ABCDEFGHIJKLMNOPQRSTUV"))
+        assertEquals(false, looksLikeClaudeKey("sk-ant-short"))
+        assertEquals("sk-ant-…wxyz", maskClaudeKey("sk-ant-api03-ABCDEFGHIJKLMNOPwxyz"))
+    }
+}

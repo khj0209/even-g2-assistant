@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { formatAiTokens, formatClock, formatTokens, mediaLine, statusLine } from '../src/core/format';
 import { parseContext } from '../src/core/modes';
-import { PcmBuffer, pcmLevel, pcmToWav } from '../src/core/pcm';
+import { PcmBuffer, pcmLevel } from '../src/core/pcm';
 import { replyPages } from '../src/core/reply';
 import { ellipsize, paginate, textWidth, wrapText } from '../src/core/textlayout';
 import { addUsage, emptyUsage, parseUsage, totalTokens } from '../src/core/usage';
@@ -101,6 +101,13 @@ describe('modes', () => {
     expect(parseContext({ mode: 'toString' })).toBeNull();
   });
 
+  it('takes the Claude key only when it looks like one', () => {
+    const key = 'sk-ant-api03-ABCDEFGHIJKLMNOPQRSTUVWXYZ012345';
+    expect(parseContext({ mode: 'assistant', claudeKey: key })?.claudeKey).toBe(key);
+    expect(parseContext({ mode: 'assistant', claudeKey: 'not-a-key' })?.claudeKey).toBeUndefined();
+    expect(parseContext({ mode: 'assistant', claudeKey: 42 })?.claudeKey).toBeUndefined();
+  });
+
   it('keeps valid media and drops malformed fields', () => {
     const c = parseContext({ mode: 'assistant', media: { title: '밤양갱', artist: '비비', app: 'YouTube Music', pos: 83_000, dur: -1 } });
     expect(c?.media).toEqual({ title: '밤양갱', artist: '비비', app: 'YouTube Music', pos: 83_000, dur: undefined });
@@ -136,17 +143,6 @@ describe('usage', () => {
 });
 
 describe('pcm', () => {
-  it('wraps PCM in a valid 16 kHz mono WAV header', () => {
-    const wav = pcmToWav(new Uint8Array(3200));
-    const v = new DataView(wav.buffer);
-    expect(new TextDecoder().decode(wav.subarray(0, 4))).toBe('RIFF');
-    expect(new TextDecoder().decode(wav.subarray(8, 12))).toBe('WAVE');
-    expect(v.getUint32(24, true)).toBe(16000);
-    expect(v.getUint16(22, true)).toBe(1);
-    expect(v.getUint32(40, true)).toBe(3200);
-    expect(wav.length).toBe(3244);
-  });
-
   it('buffers frames, caps the length and keeps whole samples', () => {
     const b = new PcmBuffer(1);
     b.push(new Uint8Array(3));
