@@ -129,7 +129,7 @@ export function dashboard(s: DashState, now: number): Dash | null {
     }
     case 'driving':
       // Normally the Drive HUD has the glasses; this shows only after the wearer left it.
-      return { big: formatDuration(elapsed), caption: '운전 중 · HUD 꺼짐', detail: '' };
+      return { big: formatDuration(elapsed), caption: '운전 시간', detail: '' };
     case 'workout': {
       const rest = s.restUntil - now;
       const workoutDetail = [`운동 ${formatDuration(elapsed)}`, heartLine(s.health, now)].filter(Boolean).join('   ');

@@ -36,7 +36,7 @@ describe('dashboard', () => {
   });
 
   it('shows only the driving time once the wearer left the Drive HUD', () => {
-    expect(dashboard({ ...base, mode: 'driving' }, 90_000)).toMatchObject({ big: '1:30', caption: '운전 중 · HUD 꺼짐' });
+    expect(dashboard({ ...base, mode: 'driving' }, 90_000)).toMatchObject({ big: '1:30', caption: '운전 시간' });
   });
 
   it('counts workout sets and rest', () => {
