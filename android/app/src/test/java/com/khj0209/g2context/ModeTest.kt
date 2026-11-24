@@ -69,3 +69,13 @@ class QueryTest {
         assertEquals(null, queryParam("/st/status?key=K", "id"))
     }
 }
+
+class HooksTest {
+    @Test
+    fun hooksPostToTheTopic() {
+        val json = org.json.JSONObject(claudeCodeHooks("g2-abc"))
+        val stop = json.getJSONObject("hooks").getJSONArray("Stop").getJSONObject(0).getJSONArray("hooks").getJSONObject(0).getString("command")
+        assertEquals(true, stop.endsWith("https://ntfy.sh/g2-abc > /dev/null"))
+        assertEquals(true, stop.contains("작업 완료: \$(basename \"\$CLAUDE_PROJECT_DIR\")"))
+    }
+}

@@ -155,6 +155,27 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
             ),
         )
 
+        val topic = ntfyTopic(this)
+        root.addView(
+            card(
+                "컴퓨터의 Claude Code 알림",
+                text("ntfy.sh/$topic", 14f, color = ACCENT).apply {
+                    typeface = Typeface.MONOSPACE
+                    setTextIsSelectable(true)
+                },
+                button("훅 설정 복사", PRIMARY) {
+                    getSystemService(android.content.ClipboardManager::class.java)
+                        .setPrimaryClip(android.content.ClipData.newPlainText("Claude Code hooks", claudeCodeHooks(topic)))
+                    android.widget.Toast.makeText(this, "복사했어요. 컴퓨터의 ~/.claude/settings.json 에 넣으세요", android.widget.Toast.LENGTH_LONG).show()
+                },
+                note(
+                    "컴퓨터 터미널에서 돌린 Claude Code가 끝나거나 승인을 기다리면 이 주소로 알림을 보내고, 안경이 일상·개발 모드에서 띄워요. " +
+                        "복사한 설정을 컴퓨터의 ~/.claude/settings.json 에 넣으세요(이미 \"hooks\"가 있으면 그 안에 합쳐서). " +
+                        "주소를 아는 사람은 알림을 읽을 수 있으니 남에게 보여주지 마세요.",
+                ),
+            ),
+        )
+
         healthState = text("", 15f)
         root.addView(
             card(

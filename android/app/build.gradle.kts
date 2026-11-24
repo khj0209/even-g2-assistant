@@ -44,4 +44,6 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("com.google.android.gms:play-services-location:21.3.0")
     testImplementation("junit:junit:4.13.2")
+    // Android's org.json is only a stub in local unit tests; the real one runs the JSON code under test.
+    testImplementation("org.json:json:20240303")
 }

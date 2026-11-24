@@ -10,6 +10,7 @@ import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationManagerCompat
+import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -85,6 +86,44 @@ fun queryParam(target: String, name: String): String? =
     target.substringAfter('?', "").split('&').firstOrNull { it.startsWith("$name=") }
         ?.removePrefix("$name=")
         ?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+
+private const val KEY_NTFY = "ntfy_topic"
+
+/**
+ * The private ntfy.sh topic a computer's Claude Code hooks post to ("작업 완료", "확인 필요"). Random and
+ * long, since anyone who knows a topic name can read and post to it.
+ */
+fun ntfyTopic(ctx: Context): String {
+    val p = prefs(ctx)
+    p.getString(KEY_NTFY, null)?.let { return it }
+    val rnd = SecureRandom()
+    val alphabet = "abcdefghijkmnopqrstuvwxyz23456789"
+    val topic = "g2-" + (1..20).map { alphabet[rnd.nextInt(alphabet.length)] }.joinToString("")
+    p.edit().putString(KEY_NTFY, topic).apply()
+    return topic
+}
+
+/** Claude Code settings for the computer: post to the topic when a task ends or needs the user. */
+fun claudeCodeHooks(topic: String): String {
+    fun hook(text: String, extra: String) = JSONObject().put(
+        "hooks",
+        JSONArray().put(
+            JSONObject().put("type", "command").put(
+                "command",
+                "curl -s -H 'Title: Claude Code'$extra -d \"$text: \$(basename \"\$CLAUDE_PROJECT_DIR\")\" https://ntfy.sh/$topic > /dev/null",
+            ),
+        ),
+    )
+    return JSONObject()
+        .put(
+            "hooks",
+            JSONObject()
+                .put("Stop", JSONArray().put(hook("작업 완료", "")))
+                .put("Notification", JSONArray().put(hook("확인 필요", " -H 'Priority: high'"))),
+        )
+        .toString(2)
+        .replace("\\/", "/")
+}
 
 /** Checks `key=` in a request target like "/mode?key=ABCD2345", in constant time. */
 fun hasPairingKey(target: String, code: String): Boolean {

@@ -17,7 +17,9 @@ import androidx.core.app.ServiceCompat
 import java.io.BufferedInputStream
 import java.io.DataInputStream
 import java.io.IOException
+import java.net.HttpURLConnection
 import java.net.InetAddress
+import java.net.URL
 import java.net.ServerSocket
 import java.net.Socket
 import kotlin.concurrent.thread
@@ -50,6 +52,7 @@ class ContextService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         prefs(this).registerOnSharedPreferenceChangeListener(this)
         registerActivityUpdates(this)
         thread(name = "mode-server", isDaemon = true) { serve() }
+        thread(name = "ntfy", isDaemon = true) { listenNtfy() }
         handler.post(tick)
     }
 
@@ -81,6 +84,8 @@ class ContextService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         handler.removeCallbacks(tick)
         prefs(this).unregisterOnSharedPreferenceChangeListener(this)
         server?.close()
+        listening = false
+        ntfyConnection?.disconnect()
         prefs(this).edit().putString(KEY_SERVER, "꺼짐").apply()
         super.onDestroy()
     }
@@ -89,6 +94,38 @@ class ContextService : Service(), SharedPreferences.OnSharedPreferenceChangeList
 
     override fun onSharedPreferenceChanged(p: SharedPreferences?, key: String?) {
         if (key in setOf(KEY_OVERRIDE, KEY_ACTIVITY, KEY_CAR, KEY_CAR_ONLY)) refresh()
+    }
+
+    @Volatile private var listening = true
+    @Volatile private var ntfyConnection: HttpURLConnection? = null
+
+    /**
+     * Follows this phone's ntfy topic, where a computer's Claude Code hooks post "작업 완료"/"확인 필요".
+     * Each message becomes the latest Claude notice, the same path as the Claude app's own notifications.
+     */
+    private fun listenNtfy() {
+        while (listening) {
+            try {
+                val c = URL("https://ntfy.sh/${ntfyTopic(this)}/json").openConnection() as HttpURLConnection
+                ntfyConnection = c
+                c.connectTimeout = 15_000
+                c.readTimeout = 120_000 // ntfy sends a keepalive about every 45 s
+                c.inputStream.bufferedReader().useLines { lines ->
+                    for (line in lines) {
+                        val m = JSONObject(line)
+                        if (m.optString("event") != "message") continue
+                        MediaListener.latestClaudeNotice = JSONObject()
+                            .put("id", "ntfy|${m.optString("id")}")
+                            .put("title", m.optString("title", "Claude Code"))
+                            .put("text", m.optString("message"))
+                            .put("at", m.optLong("time") * 1000)
+                    }
+                }
+            } catch (e: Exception) {
+                // Offline or the connection dropped: try again shortly.
+            }
+            if (listening) Thread.sleep(15_000)
+        }
     }
 
     private fun compute(): Pair<Mode, String> {
