@@ -69,8 +69,6 @@ export interface DashState {
   meetingEnd?: number;
 }
 
-const HINT = '길게 눌러 몽이에게 질문';
-
 /** A mode's glasses panel: one big number (drawn as an image) with its caption, and detail lines. */
 export interface Dash {
   big: string;
@@ -78,8 +76,10 @@ export interface Dash {
   detail: string;
 }
 
-/** The glasses' main panel for a mode, or null for the plain assistant. */
-export function dashboard(s: DashState, now: number): Dash | null {
+const WEEKDAYS = '일월화수목금토';
+
+/** The glasses' main panel for a mode. */
+export function dashboard(s: DashState, now: number): Dash {
   const elapsed = now - s.since;
   const km = s.track.distance / 1000;
   const speed = s.track.speed;
@@ -90,20 +90,20 @@ export function dashboard(s: DashState, now: number): Dash | null {
       return {
         big: formatPace(cur),
         caption: '현재 페이스 /km',
-        detail: `시간 ${formatDuration(elapsed)}   거리 ${km.toFixed(2)}km   평균 ${formatPace(avg)}\n${HINT}`,
+        detail: `시간 ${formatDuration(elapsed)}   거리 ${km.toFixed(2)}km   평균 ${formatPace(avg)}`,
       };
     }
     case 'driving':
       return {
         big: speed != null ? String(Math.round(speed * 3.6)) : '--',
         caption: 'km/h',
-        detail: `주행 ${formatDuration(elapsed)} · ${km.toFixed(1)}km   지금 ${formatClock(new Date(now))}\n${HINT}`,
+        detail: `주행 ${formatDuration(elapsed)} · ${km.toFixed(1)}km   지금 ${formatClock(new Date(now))}`,
       };
     case 'workout': {
       const rest = s.restUntil - now;
       return rest > 0
-        ? { big: formatDuration(rest), caption: `휴식 · ${s.sets}세트 완료`, detail: `운동 ${formatDuration(elapsed)}\n${HINT}` }
-        : { big: `${s.sets}세트`, caption: '탭하면 세트 완료 + 휴식 90초', detail: `운동 ${formatDuration(elapsed)}\n${HINT}` };
+        ? { big: formatDuration(rest), caption: `휴식 · ${s.sets}세트 완료`, detail: `운동 ${formatDuration(elapsed)}` }
+        : { big: `${s.sets}세트`, caption: '탭하면 세트 완료 + 휴식 90초', detail: `운동 ${formatDuration(elapsed)}` };
     }
     case 'dev': {
       const cycle = FOCUS_MS + BREAK_MS;
@@ -113,16 +113,18 @@ export function dashboard(s: DashState, now: number): Dash | null {
       return {
         big: formatDuration(focus ? FOCUS_MS - pos : cycle - pos),
         caption: focus ? `집중 ${round}회차` : '쉬는 시간',
-        detail: `개발 ${formatDuration(elapsed)}\n${HINT}`,
+        detail: `개발 ${formatDuration(elapsed)}`,
       };
     }
     case 'meeting': {
       const left = s.meetingEnd && s.meetingEnd > now ? s.meetingEnd - now : null;
       return left != null
-        ? { big: `${Math.ceil(left / 60_000)}분`, caption: `${formatClock(new Date(s.meetingEnd!))}까지`, detail: `회의 경과 ${formatDuration(elapsed)}\n${HINT}` }
-        : { big: formatDuration(elapsed), caption: '회의 경과', detail: HINT };
+        ? { big: `${Math.ceil(left / 60_000)}분`, caption: `${formatClock(new Date(s.meetingEnd!))}까지`, detail: `회의 경과 ${formatDuration(elapsed)}` }
+        : { big: formatDuration(elapsed), caption: '회의 경과', detail: '' };
     }
-    default:
-      return null;
+    case 'assistant': {
+      const d = new Date(now);
+      return { big: formatClock(d), caption: `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEKDAYS[d.getDay()]})`, detail: '' };
+    }
   }
 }

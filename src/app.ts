@@ -11,14 +11,14 @@ import { mediaLine, statusLine } from './core/format';
 import { MODES, type ContextMode, type Media } from './core/modes';
 import { addFix, dashboard, emptyTrack, REST_MS, type Dash, type Track } from './core/dashboard';
 import { replyPages } from './core/reply';
-import { DEFAULT_SETTINGS, type DeviceState, type Mood, type Settings, type TempRange } from './core/types';
+import { DEFAULT_SETTINGS, type DeviceState, type Settings, type TempRange } from './core/types';
 import { addUsage, emptyUsage, parseUsage, rollUsage, totalTokens, type UsageState } from './core/usage';
 import { GlassesSink } from './glasses/glassesSink';
-import { REPLY, SCREEN } from './glasses/layout';
+import { POPUP, SCREEN } from './glasses/layout';
 import { Renderer, type Sink } from './glasses/renderer';
 import type { SecretStore } from './platform/secrets';
 import type { KV } from './platform/storage';
-import { askClaude, describeError, makeClient, PET_NAME } from './services/claude';
+import { askClaude, describeError, makeClient } from './services/claude';
 import { askAgent, appendTurn, listAgentSessions, SessionStore, type AgentSessionInfo } from './services/sessions';
 import {
   chooseStt,
@@ -33,11 +33,11 @@ import { fetchContext } from './services/context';
 
 type Stage = 'idle' | 'listening' | 'transcribing' | 'answering';
 
-const TICK_MS = 450;
+const TICK_MS = 1000;
 const WEATHER_TTL = 30 * 60_000;
 const MAX_LISTEN_MS = 60_000;
 const CONTEXT_POLL_MS = 5000;
-/** How long an answer stays up before the mode's dashboard comes back. */
+/** How long the conversation popup stays open after the last answer or message. */
 const ANSWER_HOLD_MS = 20_000;
 const GPS_MODES = new Set<ContextMode>(['running', 'driving']);
 /** The host may deliver one touch as both a text and a sys event: drop repeats this close together. */
@@ -58,7 +58,6 @@ export class Assistant {
   readonly sessions: SessionStore;
   readonly renderer = new Renderer();
   stage: Stage = 'idle';
-  mood: Mood = 'idle';
   question = '';
   answer = '';
   pages: string[] = [''];
@@ -82,8 +81,6 @@ export class Assistant {
   /** When the reply panel last showed something new (an answer, a message, a page turn). */
   private replyAt = 0;
 
-  private frame = 0;
-  private moodSince = Date.now();
   private glasses: GlassesSink | null = null;
   private glassesMic: GlassesMicRecognizer | null = null;
   private recognizer: Recognizer | null = null;
@@ -112,7 +109,7 @@ export class Assistant {
     }
     this.usage = parseUsage(await kv.get('usage'), new Date());
     await this.sessions.load();
-    this.resetReply(await this.welcome());
+    await this.showWelcome();
 
     if (bridge) {
       this.glasses = new GlassesSink(bridge);
@@ -129,7 +126,6 @@ export class Assistant {
         .then((info) => info && this.onDevice(info.status))
         .catch(() => undefined);
     }
-    this.renderer.start();
     this.render();
     setInterval(() => this.tick(), TICK_MS);
     void this.refreshWeather();
@@ -177,11 +173,6 @@ export class Assistant {
     this.sets = 0;
     this.restUntil = 0;
     void this.setGps(GPS_MODES.has(next));
-    if (this.stage === 'idle') {
-      this.setMood('happy');
-      if (next === 'assistant') this.resetReply(`${MODES[next].label} 모드로 바꿨어요.`);
-      else this.replyAt = 0; // show the new mode's dashboard right away
-    }
     this.render();
   }
 
@@ -197,9 +188,18 @@ export class Assistant {
     }
   }
 
-  /** The mode's dashboard, shown while idle once the last answer has been up for a while. */
-  private dashboardView(): Dash | null {
-    if (this.stage !== 'idle' || Date.now() - this.replyAt < ANSWER_HOLD_MS) return null;
+  /** The conversation popup is open while talking, and for a while after the last answer or message. */
+  popupOpen(): boolean {
+    return this.stage !== 'idle' || Date.now() - this.replyAt < ANSWER_HOLD_MS;
+  }
+
+  private closePopup(): void {
+    this.replyAt = 0;
+    this.render();
+  }
+
+  /** The mode's dashboard, the screen under the popup. */
+  private dashboardView(): Dash {
     return dashboard(
       { mode: this.mode, since: this.modeSince, track: this.track, sets: this.sets, restUntil: this.restUntil, meetingEnd: this.meetingEnd },
       Date.now(),
@@ -219,7 +219,7 @@ export class Assistant {
   /** Called by the phone after the Claude key changed. */
   async keyChanged(): Promise<void> {
     this.clients.clear();
-    if (this.stage === 'idle') this.resetReply(await this.welcome());
+    if (this.stage === 'idle') await this.showWelcome();
     this.render();
   }
 
@@ -272,24 +272,30 @@ export class Assistant {
         break;
       case OsEventTypeList.CLICK_EVENT:
         if (this.stage === 'listening') void this.stopListening();
-        else if (this.stage === 'idle' && this.dashboardView() && this.mode === 'workout') {
+        else if (this.stage !== 'idle') break;
+        // Popup: next page, and close after the last one.
+        else if (this.popupOpen()) {
+          if (this.page < this.pages.length - 1) this.turnPage(1);
+          else this.closePopup();
+        } else if (this.mode === 'workout') {
           this.sets++;
           this.restUntil = Date.now() + REST_MS;
           this.render();
-        } else if (this.stage === 'idle' && this.dashboardView()) {
-          this.replyAt = Date.now(); // tap on a dashboard brings the last answer back
+        } else if (this.question) {
+          this.replyAt = Date.now(); // reopen the last answer
           this.render();
-        } else if (this.stage === 'idle') this.turnPage(1, true);
+        }
         break;
       case OsEventTypeList.SCROLL_BOTTOM_EVENT:
-        this.turnPage(1, false);
+        if (this.popupOpen()) this.turnPage(1);
         break;
       case OsEventTypeList.SCROLL_TOP_EVENT:
-        this.turnPage(-1, false);
+        if (this.popupOpen()) this.turnPage(-1);
         break;
       case OsEventTypeList.DOUBLE_CLICK_EVENT:
         if (this.stage === 'listening') this.cancelListening();
         else if (this.stage === 'answering') this.abort?.abort();
+        else if (this.popupOpen()) this.closePopup();
         else this.glasses?.exit();
         break;
       case OsEventTypeList.FOREGROUND_ENTER_EVENT:
@@ -298,11 +304,8 @@ export class Assistant {
     }
   }
 
-  private turnPage(delta: number, wrap: boolean): void {
-    if (this.pages.length < 2) return;
-    let p = this.page + delta;
-    if (wrap) p = (p + this.pages.length) % this.pages.length;
-    p = Math.max(0, Math.min(this.pages.length - 1, p));
+  private turnPage(delta: number): void {
+    const p = Math.max(0, Math.min(this.pages.length - 1, this.page + delta));
     if (p === this.page) return;
     this.page = p;
     this.replyAt = Date.now();
@@ -324,7 +327,6 @@ export class Assistant {
     this.recognizer = choice.kind === 'glasses' ? this.glassesMic! : new PhoneSpeechRecognizer();
     if (choice.kind === 'glasses') await this.glasses?.ready;
     this.stage = 'listening';
-    this.setMood('listening');
     this.resetReply('말씀하세요…');
     this.render();
     try {
@@ -349,7 +351,6 @@ export class Assistant {
     const rec = this.recognizer;
     this.recognizer = null;
     this.stage = 'transcribing';
-    this.setMood('thinking');
     this.resetReply('알아듣는 중…');
     this.render();
     let text = '';
@@ -361,7 +362,6 @@ export class Assistant {
     }
     this.stage = 'idle';
     if (!text) {
-      this.setMood('idle');
       this.resetReply('잘 못 들었어요. 다시 길게 누르고 말해 주세요.');
       this.render();
       return;
@@ -374,8 +374,7 @@ export class Assistant {
     this.recognizer?.cancel();
     this.recognizer = null;
     this.stage = 'idle';
-    this.setMood('idle');
-    this.resetReply('취소했어요.');
+    this.closePopup();
     this.render();
   }
 
@@ -388,12 +387,10 @@ export class Assistant {
     this.stage = 'answering';
     this.question = q;
     this.answer = '';
-    this.setMood('thinking');
     this.layoutReply(false);
     this.render();
     this.abort = new AbortController();
     const onText = (delta: string) => {
-      if (this.mood !== 'talking') this.setMood('talking');
       this.answer += delta;
       this.layoutReply(true);
       this.render();
@@ -414,11 +411,9 @@ export class Assistant {
         await this.sessions.update(appendTurn(this.sessions.current() ?? s, { role: 'assistant', text: this.answer }));
       }
       this.notice = '';
-      this.setMood('happy');
     } catch (e) {
       this.notice = describeError(e);
       this.answer = this.answer ? `${this.answer}\n\n(${this.notice})` : this.notice;
-      this.setMood('error');
     } finally {
       this.abort = null;
       this.stage = 'idle';
@@ -429,15 +424,8 @@ export class Assistant {
 
   // ---------------------------------------------------------------- screen
 
-  private setMood(m: Mood): void {
-    this.mood = m;
-    this.moodSince = Date.now();
-    this.frame = 0;
-  }
-
   private fail(message: string): void {
     this.notice = message;
-    this.setMood('error');
     this.resetReply(message);
     this.render();
   }
@@ -450,30 +438,23 @@ export class Assistant {
 
   /** Re-paginates; `follow` keeps the newest text in view while it streams in. */
   private layoutReply(follow: boolean): void {
-    this.pages = replyPages(this.question, this.answer, REPLY.textWidth, REPLY.lines);
+    this.pages = replyPages(this.question, this.answer, POPUP.textWidth, POPUP.lines);
     this.page = follow ? this.pages.length - 1 : 0;
     this.replyAt = Date.now();
   }
 
-  private async welcome(): Promise<string> {
-    if (!(await this.deps.secrets.get('anthropic'))) return `안녕하세요, ${PET_NAME}예요!\n휴대폰 화면에서 Claude API 키를 등록해 주세요.`;
-    return `안녕하세요, ${PET_NAME}예요!\n안경을 길게 누른 채 말하고, 손을 떼면 대답할게요.`;
+  /** Opens the popup with setup help until the Claude key is entered. */
+  private async showWelcome(): Promise<void> {
+    if (!(await this.deps.secrets.get('anthropic'))) this.resetReply('휴대폰 화면에서 Claude API 키를 등록해 주세요.');
   }
 
   private tick(): void {
-    const age = Date.now() - this.moodSince;
-    if ((this.mood === 'happy' && age > 4000) || (this.mood === 'error' && age > 8000)) this.setMood('idle');
-    if (this.mood === 'idle') {
-      // Blink for one tick every ~5 s.
-      this.frame = Math.floor(age / TICK_MS) % 11 === 10 ? 1 : 0;
-    } else {
-      this.frame++;
-    }
     this.render();
   }
 
   render(): void {
     const dash = this.dashboardView();
+    const popup = this.popupOpen();
     this.renderer.render({
       status: statusLine({
         mode: MODES[this.mode].label,
@@ -483,13 +464,11 @@ export class Assistant {
         used: this.usedTokens(),
         budget: this.settings.monthlyBudget,
       }),
-      mood: this.mood,
-      frame: this.frame,
-      petName: PET_NAME,
       media: mediaLine(this.media, SCREEN.w - 16),
-      hero: dash && { big: dash.big, caption: dash.caption },
-      detail: dash?.detail ?? '',
-      reply: dash ? '' : (this.pages[this.page] ?? ''),
+      // Under an open popup nothing is drawn: the glasses add light, so anything behind would show through.
+      hero: popup ? null : { big: dash.big, caption: dash.caption },
+      detail: popup ? '' : dash.detail,
+      popup: popup ? (this.pages[this.page] ?? '') : null,
     });
     for (const cb of this.listeners) cb();
   }

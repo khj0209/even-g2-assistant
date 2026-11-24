@@ -1,30 +1,4 @@
-import type { Mood } from '../core/types';
-import { HERO, PET } from './layout';
-import { PALETTE, petLabel, spriteGrid } from './sprite';
-
-/** Paints the bear and its label into a canvas the size of the pet container. */
-export function paintPet(mood: Mood, frame: number, name: string): HTMLCanvasElement {
-  const c = document.createElement('canvas');
-  c.width = PET.w;
-  c.height = PET.h;
-  const ctx = c.getContext('2d')!;
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, PET.w, PET.h);
-  spriteGrid(mood, frame).forEach((row, y) =>
-    [...row].forEach((code, x) => {
-      const g = PALETTE[code] ?? 0;
-      if (!g) return;
-      ctx.fillStyle = `rgb(${g},${g},${g})`;
-      ctx.fillRect(PET.spriteX + x * PET.scale, y * PET.scale, PET.scale, PET.scale);
-    }),
-  );
-  ctx.fillStyle = '#ddd';
-  ctx.font = 'bold 18px system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  ctx.fillText(petLabel(mood, frame, name), PET.w / 2, PET.labelY);
-  return c;
-}
+import { HERO } from './layout';
 
 /** The dashboard's big number with its caption underneath; black (nothing lit) when there is none. */
 export function paintHero(hero: { big: string; caption: string } | null): HTMLCanvasElement {

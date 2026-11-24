@@ -28,7 +28,15 @@ export function pageFields(boxes: Box[]) {
     containerTotalNum: boxes.length,
     textObject: boxes.flatMap((b, z) =>
       b.kind === 'text'
-        ? [new TextContainerProperty({ ...base(b, z), content: ' ', paddingLength: 4, isEventCapture: b.capture ? 1 : 0 })]
+        ? [
+            new TextContainerProperty({
+              ...base(b, z),
+              content: ' ',
+              paddingLength: b.border ? 10 : 4,
+              ...(b.border ? { borderWidth: 2, borderColor: 12, borderRadius: 8 } : {}),
+              isEventCapture: b.capture ? 1 : 0,
+            }),
+          ]
         : [],
     ),
     imageObject: boxes.flatMap((b, z) => (b.kind === 'image' ? [new ImageContainerProperty(base(b, z))] : [])),
