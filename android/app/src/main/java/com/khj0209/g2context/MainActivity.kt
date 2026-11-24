@@ -43,6 +43,8 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
     private lateinit var diagnostics: TextView
     private lateinit var keyState: TextView
     private lateinit var carState: TextView
+    private lateinit var healthState: TextView
+    private lateinit var healthButton: Button
     private val modeButtons = mutableMapOf<Mode?, Button>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -66,7 +68,8 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
         mediaButton = button("재생 정보 접근 허용 (알림 접근)", PRIMARY) {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         }
-        setupCard = card("설정이 필요해요", permissionButton, batteryButton, mediaButton)
+        healthButton = button("삼성헬스 연결 (Health Connect 권한)", PRIMARY) { requestPermissions(HEALTH_PERMISSIONS, 2) }
+        setupCard = card("설정이 필요해요", permissionButton, batteryButton, mediaButton, healthButton)
         root.addView(setupCard)
 
         keyState = text("", 15f)
@@ -135,6 +138,15 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
         }
         root.addView(card("차량 블루투스", carState, carOnly.spaced(), note("차 오디오·핸즈프리 블루투스에 연결되면 움직임과 상관없이 운전 모드가 됩니다.")))
 
+        healthState = text("", 15f)
+        root.addView(
+            card(
+                "삼성헬스",
+                healthState,
+                note("삼성헬스 → 설정 → Health Connect에서 걸음·수면·심박 공유를 켜 두세요. 워치의 연속 심박은 몇 분씩 늦게 들어올 수 있어요."),
+            ),
+        )
+
         diagnostics = text("", 12f, color = DIM).apply { setPadding(0, dp(12), 0, 0) }
         root.addView(card("도움말", note(HELP.trim()), diagnostics))
 
@@ -194,10 +206,20 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
         val needPermissions = PERMISSIONS.any { !granted(this, it) }
         val needBattery = !getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
         val needMedia = !mediaAccessGranted(this)
+        val needHealth = healthSupported() && !healthGranted(this)
+        healthButton.visibility = if (needHealth) View.VISIBLE else View.GONE
         permissionButton.visibility = if (needPermissions) View.VISIBLE else View.GONE
         batteryButton.visibility = if (needBattery) View.VISIBLE else View.GONE
         mediaButton.visibility = if (needMedia) View.VISIBLE else View.GONE
-        setupCard.visibility = if (needPermissions || needBattery || needMedia) View.VISIBLE else View.GONE
+        setupCard.visibility = if (needPermissions || needBattery || needMedia || needHealth) View.VISIBLE else View.GONE
+        healthState.text = when {
+            !healthSupported() -> "안드로이드 14 이상에서 쓸 수 있어요"
+            needHealth -> "○ 연결 안 됨 — 위에서 권한을 허용하세요"
+            else -> "● 연결됨"
+        }
+        healthState.setTextColor(if (healthGranted(this)) ACCENT else DIM)
+        // Health Connect allows reads while this screen is open, so refresh the glasses' values now.
+        if (healthGranted(this)) Thread { health(this) }.start()
 
         modeButtons.forEach { (m, b) -> style(b, if (m == override) SELECTED else NORMAL) }
 

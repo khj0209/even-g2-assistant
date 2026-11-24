@@ -8,7 +8,7 @@ import {
   type EvenHubEvent,
 } from '@evenrealities/even_hub_sdk';
 import { mediaLine, statusLine } from './core/format';
-import { MODES, type ContextMode, type Media } from './core/modes';
+import { MODES, type ContextMode, type Health, type Media } from './core/modes';
 import { addFix, dashboard, emptyTrack, REST_MS, splitNotice, type Dash, type Track } from './core/dashboard';
 import { isParkingQuestion, parkingAnswer, type Parking } from './core/parking';
 import { replyPages } from './core/reply';
@@ -91,6 +91,8 @@ export class Assistant {
   companionError = '';
   /** Next calendar event (from G2 Context), and the one already reminded of. */
   nextEvent: { title: string; start: number } | undefined;
+  /** Samsung Health values from G2 Context. */
+  health: Health | undefined;
   private remindedKey = '';
   /** Running: last whole kilometre announced, and when it was reached. */
   private splitKm = 0;
@@ -219,6 +221,7 @@ export class Assistant {
     this.syncDrive(next === 'driving' && !this.driveSnoozed);
     this.meetingEnd = ctx?.end;
     this.nextEvent = ctx?.next;
+    this.health = ctx?.health;
     // Kept in memory only; it disappears when G2 Context removes it or stops answering.
     if (ctx?.claudeKey !== this.claudeKey) {
       const hadKey = !!this.claudeKey;
@@ -404,6 +407,7 @@ export class Assistant {
         meetingEnd: this.meetingEnd,
         next: this.nextEvent,
         targetPace: this.settings.targetPace,
+        health: this.health,
       },
       Date.now(),
     );

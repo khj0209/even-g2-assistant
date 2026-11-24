@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dashboard, emptyTrack, paceVersusTarget, splitNotice, type DashState } from '../src/core/dashboard';
+import { dashboard, emptyTrack, healthLine, heartLine, paceVersusTarget, splitNotice, type DashState } from '../src/core/dashboard';
 import { parseContext } from '../src/core/modes';
 import { isParkingQuestion, parkingAnswer } from '../src/core/parking';
 import { finishedSessions } from '../src/services/sessions';
@@ -54,5 +54,25 @@ describe('agent sessions', () => {
     const now = [{ id: 'a', status: 'idle' }, { id: 'b', status: 'running' }, { id: 'c', status: 'idle' }];
     expect(finishedSessions(null, now)).toEqual([]);
     expect(finishedSessions(new Map([['a', 'running'], ['b', 'running'], ['c', 'idle']]), now)).toEqual(['a']);
+  });
+});
+
+describe('Samsung Health', () => {
+  it('parses only numbers', () => {
+    expect(parseContext({ mode: 'assistant', health: { steps: 6240, sleepMin: 432, hr: 'x', hrAt: -1 } })?.health).toEqual({ steps: 6240, sleepMin: 432, hr: undefined, hrAt: undefined });
+  });
+
+  it('formats steps and sleep, and only recent heart rate', () => {
+    expect(healthLine({ steps: 6240, sleepMin: 432 })).toBe('걸음 6,240 · 수면 7시간 12분');
+    expect(healthLine(undefined)).toBe('');
+    expect(heartLine({ hr: 142, hrAt: 0 }, 3 * 60_000)).toBe('심박 142 (3분 전)');
+    expect(heartLine({ hr: 142, hrAt: 0 }, 20_000)).toBe('심박 142');
+    expect(heartLine({ hr: 142, hrAt: 0 }, 31 * 60_000)).toBe('');
+  });
+
+  it('shows on the plain screen even without a next event, and with heart rate while running', () => {
+    expect(dashboard({ ...base, health: { steps: 100 } }, 0)).toEqual({ big: '', caption: '', detail: '걸음 100' });
+    const d = dashboard({ ...base, mode: 'running', health: { hr: 150, hrAt: 0 } }, 60_000)!;
+    expect(d.detail.split('\n')[1]).toBe('심박 150 (1분 전)');
   });
 });

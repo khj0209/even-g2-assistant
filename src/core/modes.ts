@@ -50,6 +50,16 @@ export interface Context {
   claudeKey?: string;
   /** The next calendar event within 12 hours; only sent with the pairing code. Start in ms. */
   next?: { title: string; start: number };
+  /** Samsung Health via Health Connect; only sent with the pairing code. */
+  health?: Health;
+}
+
+/** Today's steps, last night's sleep (minutes) and the latest heart rate with its time (ms). */
+export interface Health {
+  steps?: number;
+  sleepMin?: number;
+  hr?: number;
+  hrAt?: number;
 }
 
 const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
@@ -64,6 +74,7 @@ export function parseContext(json: unknown): Context | null {
     media?: Record<string, unknown>;
     claudeKey?: unknown;
     next?: { title?: unknown; start?: unknown };
+    health?: Record<string, unknown>;
   } | null;
   if (!j || !isMode(j.mode)) return null;
   const m = j.media;
@@ -75,5 +86,8 @@ export function parseContext(json: unknown): Context | null {
     ...(title ? { media: { title, artist: str(m!.artist), app: str(m!.app), pos: num(m!.pos), dur: num(m!.dur) } } : {}),
     ...(typeof j.claudeKey === 'string' && looksLikeAnthropicKey(j.claudeKey) ? { claudeKey: j.claudeKey.trim() } : {}),
     ...(str(j.next?.title) && num(j.next?.start) != null ? { next: { title: str(j.next!.title)!, start: num(j.next!.start)! } } : {}),
+    ...(j.health && typeof j.health === 'object'
+      ? { health: { steps: num(j.health.steps), sleepMin: num(j.health.sleepMin), hr: num(j.health.hr), hrAt: num(j.health.hrAt) } }
+      : {}),
   };
 }

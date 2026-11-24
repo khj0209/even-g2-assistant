@@ -1,5 +1,5 @@
 import { formatClock } from './format';
-import type { ContextMode } from './modes';
+import type { ContextMode, Health } from './modes';
 
 /** Distance travelled since the mode started, from GPS fixes. */
 export interface Track {
@@ -71,6 +71,24 @@ export interface DashState {
   next?: { title: string; start: number };
   /** Running: target pace in s/km, 0 for none. */
   targetPace?: number;
+  /** Samsung Health values, when G2 Context sends them. */
+  health?: Health;
+}
+
+/** "걸음 6,240 · 수면 7시간 12분", or '' with nothing to show. */
+export function healthLine(h: Health | undefined): string {
+  if (!h) return '';
+  const parts: string[] = [];
+  if (h.steps != null) parts.push(`걸음 ${h.steps.toLocaleString('ko-KR')}`);
+  if (h.sleepMin) parts.push(`수면 ${Math.floor(h.sleepMin / 60)}시간 ${h.sleepMin % 60}분`);
+  return parts.join(' · ');
+}
+
+/** "심박 142 (3분 전)" for readings from the last 30 minutes; older ones aren't worth showing. */
+export function heartLine(h: Health | undefined, now: number): string {
+  if (!h?.hr || h.hrAt == null || now - h.hrAt > 30 * 60_000) return '';
+  const mins = Math.round((now - h.hrAt) / 60_000);
+  return `심박 ${h.hr}${mins >= 1 ? ` (${mins}분 전)` : ''}`;
 }
 
 /** "2 km · 구간 5'12\" · 평균 5'20\"", shown as each kilometre is completed. */
@@ -106,7 +124,7 @@ export function dashboard(s: DashState, now: number): Dash | null {
       return {
         big: formatPace(cur),
         caption: s.targetPace ? paceVersusTarget(cur, s.targetPace) : '현재 페이스 /km',
-        detail: `시간 ${formatDuration(elapsed)}   거리 ${km.toFixed(2)}km   평균 ${formatPace(avg)}`,
+        detail: [`시간 ${formatDuration(elapsed)}   거리 ${km.toFixed(2)}km   평균 ${formatPace(avg)}`, heartLine(s.health, now)].filter(Boolean).join('\n'),
       };
     }
     case 'driving':
@@ -114,9 +132,10 @@ export function dashboard(s: DashState, now: number): Dash | null {
       return { big: formatDuration(elapsed), caption: '운전 중 · HUD 꺼짐', detail: '' };
     case 'workout': {
       const rest = s.restUntil - now;
+      const workoutDetail = [`운동 ${formatDuration(elapsed)}`, heartLine(s.health, now)].filter(Boolean).join('   ');
       return rest > 0
-        ? { big: formatDuration(rest), caption: `휴식 · ${s.sets}세트 완료`, detail: `운동 ${formatDuration(elapsed)}`, progress: 1 - rest / REST_MS }
-        : { big: `${s.sets}세트`, caption: '탭하면 세트 완료 + 휴식 90초', detail: `운동 ${formatDuration(elapsed)}` };
+        ? { big: formatDuration(rest), caption: `휴식 · ${s.sets}세트 완료`, detail: workoutDetail, progress: 1 - rest / REST_MS }
+        : { big: `${s.sets}세트`, caption: '탭하면 세트 완료 + 휴식 90초', detail: workoutDetail };
     }
     case 'dev': {
       const cycle = FOCUS_MS + BREAK_MS;
@@ -144,10 +163,14 @@ export function dashboard(s: DashState, now: number): Dash | null {
     case 'assistant': {
       // No big number in plain mode: just the next event on the bottom line, if there is one.
       const n = s.next && s.next.start > now ? s.next : null;
-      if (!n) return null;
-      const mins = Math.ceil((n.start - now) / 60_000);
-      const when = mins < 60 ? `${mins}분 후` : `${Math.floor(mins / 60)}시간 ${mins % 60}분 후`;
-      return { big: '', caption: '', detail: `다음 일정  ${formatClock(new Date(n.start))} ${n.title} · ${when}` };
+      let next = '';
+      if (n) {
+        const mins = Math.ceil((n.start - now) / 60_000);
+        const when = mins < 60 ? `${mins}분 후` : `${Math.floor(mins / 60)}시간 ${mins % 60}분 후`;
+        next = `다음 일정  ${formatClock(new Date(n.start))} ${n.title} · ${when}`;
+      }
+      const detail = [next, healthLine(s.health)].filter(Boolean).join('\n');
+      return detail ? { big: '', caption: '', detail } : null;
     }
   }
 }
