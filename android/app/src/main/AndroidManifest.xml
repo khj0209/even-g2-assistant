@@ -50,17 +50,6 @@
                 android:value="Serves the detected situation to the user's smart-glasses app over localhost" />
         </service>
 
-        <!-- Notification access is what lets the app read what's playing (media sessions). -->
-        <service
-            android:name=".MediaListener"
-            android:exported="true"
-            android:label="G2 Context 재생 정보"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
-            <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService" />
-            </intent-filter>
-        </service>
-
         <receiver
             android:name=".ActivityReceiver"
             android:exported="false" />

@@ -25,6 +25,12 @@ android {
             keyPassword = System.getenv("KEYSTORE_PASSWORD")
         }
     }
+    // standard: installs anywhere. full: adds what's playing (notification access), see src/full.
+    flavorDimensions += "media"
+    productFlavors {
+        create("standard") { dimension = "media" }
+        create("full") { dimension = "media" }
+    }
     buildTypes {
         release {
             isMinifyEnabled = false

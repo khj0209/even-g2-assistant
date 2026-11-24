@@ -61,7 +61,11 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
             letterSpacing = 0.15f
             setTextIsSelectable(true)
         })
-        root.addView(text("Even 앱 → G2 Assistant → 설정 → G2 Context 연결에 입력하면 재생 중인 음악·영상이 안경에 보여요.", 13f, dim = true))
+        root.addView(text(
+            if (mediaSupported(this)) "Even 앱 → G2 Assistant → 설정 → G2 Context 연결에 입력하면 재생 중인 음악·영상이 안경에 보여요."
+            else "재생 정보 표시는 g2-context-media.apk 버전에서만 돼요 (설치 방법은 README).",
+            13f, dim = true,
+        ))
 
         root.addView(heading("모드 직접 지정"))
         val grid = GridLayout(this).apply { columnCount = 3 }
@@ -118,7 +122,7 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
         // Setup steps disappear once done.
         val needPermissions = PERMISSIONS.any { !granted(this, it) }
         val needBattery = !getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
-        val needMedia = !mediaAccessGranted(this)
+        val needMedia = mediaSupported(this) && !mediaAccessGranted(this)
         permissionButton.visibility = if (needPermissions) View.VISIBLE else View.GONE
         batteryButton.visibility = if (needBattery) View.VISIBLE else View.GONE
         mediaButton.visibility = if (needMedia) View.VISIBLE else View.GONE

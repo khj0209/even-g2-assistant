@@ -20,6 +20,14 @@ class MediaListener : NotificationListenerService()
 
 fun mediaAccessGranted(ctx: Context) = ctx.packageName in NotificationManagerCompat.getEnabledListenerPackages(ctx)
 
+/** Only the "full" build declares the listener (see src/full/AndroidManifest.xml). */
+fun mediaSupported(ctx: Context) = try {
+    ctx.packageManager.getServiceInfo(ComponentName(ctx, MediaListener::class.java), 0)
+    true
+} catch (e: Exception) {
+    false
+}
+
 /** The session that is playing right now: title, artist, app, position and length (ms). */
 fun currentMedia(ctx: Context): JSONObject? {
     val sessions = try {

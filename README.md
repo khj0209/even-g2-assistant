@@ -75,7 +75,22 @@ claude.ai/code 의 Claude Code 세션은 API 키로 접근할 수 있는 공개 
 - **재생 정보**: G2 Context에서 "재생 정보 접근 허용"(알림 접근)을 켜고, 앱에 보이는 8자리 **연결 코드**를 Even 앱의
   G2 Assistant → 설정 → G2 Context 연결에 넣으면 재생 중인 음악·영상이 상태 줄 아래에 나옵니다. 같은 휴대폰의 다른 앱도
   로컬 주소를 부를 수 있어서, 재생 정보는 코드가 맞는 요청에만 보냅니다.
-- APK: GitHub Releases 의 **android-latest** 에서 `g2-context.apk` 를 내려받아 설치합니다(`android/` 가 바뀔 때마다 자동 빌드).
+- APK: GitHub Releases 의 **android-latest** 에 두 가지가 올라갑니다(`android/` 가 바뀔 때마다 자동 빌드).
+  - `g2-context.apk`: 기본. 브라우저로 내려받아 바로 설치됩니다.
+  - `g2-context-media.apk`: 재생 정보 표시 포함. 다른 앱의 재생 정보를 읽으려면 "알림 접근" 권한이 필요한데,
+    Play 프로텍트는 이 권한을 가진 앱을 브라우저·파일 앱으로 설치하는 것을 **"기기 보호를 위해 앱이 차단됨"** 으로 막습니다
+    (금융 사기 앱이 쓰는 권한이라서). 그래서 휴대폰의 Termux에서 adb로 설치합니다:
+    1. 설정 → 개발자 옵션 → **무선 디버깅** 켜기 → "페어링 코드로 기기 페어링"
+    2. Termux에서
+       ```bash
+       pkg install android-tools
+       adb pair 127.0.0.1:<페어링 포트> <페어링 코드>
+       adb connect 127.0.0.1:<무선 디버깅 화면의 포트>
+       curl -LO https://github.com/khj0209/even-g2-assistant/releases/download/android-latest/g2-context-media.apk
+       adb install -r g2-context-media.apk
+       ```
+    3. 설정 → 애플리케이션 → G2 Context → 오른쪽 위 ⋮ → **제한된 설정 허용** (안드로이드 13+), 그다음 앱에서 "재생 정보 접근 허용"
+    - 같은 서명이라 기본 버전 위에 덮어 설치되고 설정도 그대로입니다.
   설치 후 앱에서 권한 허용과 "배터리 최적화 제외"를 꼭 눌러 주세요. 삼성 기기는 백그라운드 앱을 적극적으로 재웁니다.
 
 ## 보안
