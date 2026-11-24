@@ -9,12 +9,19 @@
   "permissions": [
     {
       "name": "network",
-      "desc": "Claude API로 대화하고, 오늘 날씨(Open-Meteo)를 불러오며, 같은 휴대폰의 G2 Context 앱(127.0.0.1)에서 현재 상황·Claude 키·재생 정보를 받고 음성을 글자로 바꿉니다.",
+      "desc": "Claude API로 대화하고, 오늘 날씨(Open-Meteo)를 불러오며, 같은 휴대폰의 G2 Context 앱(127.0.0.1)에서 상황·키·재생 정보를 받고 음성을 글자로 바꿉니다. 운전 중에는 제한속도·단속 카메라·지도(OpenStreetMap)와 경로(OSRM·Nominatim, Tmap 키 등록 시 Tmap)를 불러옵니다.",
       "whitelist": [
         "https://api.anthropic.com",
         "https://api.open-meteo.com",
         "http://127.0.0.1:8765",
-        "http://localhost:8765"
+        "http://localhost:8765",
+        "https://khj0209.github.io",
+        "https://overpass-api.de",
+        "https://overpass.private.coffee",
+        "https://maps.mail.ru",
+        "https://router.project-osrm.org",
+        "https://nominatim.openstreetmap.org",
+        "https://apis.openapi.sk.com"
       ]
     },
     {
@@ -23,7 +30,7 @@
     },
     {
       "name": "location",
-      "desc": "현재 위치의 오늘 최저·최고 기온을 보여주기 위해 대략적인 위치를 사용합니다."
+      "desc": "오늘 기온 조회, 러닝 기록, 운전 중 속도·제한속도·길 안내를 위해 위치를 사용합니다."
     }
   ],
   "supported_languages": [

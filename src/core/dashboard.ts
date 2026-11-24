@@ -76,10 +76,8 @@ export interface Dash {
   detail: string;
 }
 
-const WEEKDAYS = '일월화수목금토';
-
-/** The glasses' main panel for a mode. */
-export function dashboard(s: DashState, now: number): Dash {
+/** The glasses' main panel for a mode; null leaves the screen empty (plain assistant). */
+export function dashboard(s: DashState, now: number): Dash | null {
   const elapsed = now - s.since;
   const km = s.track.distance / 1000;
   const speed = s.track.speed;
@@ -94,11 +92,8 @@ export function dashboard(s: DashState, now: number): Dash {
       };
     }
     case 'driving':
-      return {
-        big: speed != null ? String(Math.round(speed * 3.6)) : '--',
-        caption: 'km/h',
-        detail: `주행 ${formatDuration(elapsed)} · ${km.toFixed(1)}km   지금 ${formatClock(new Date(now))}`,
-      };
+      // Normally the Drive HUD has the glasses; this shows only after the wearer left it.
+      return { big: formatDuration(elapsed), caption: '운전 중 · HUD 꺼짐', detail: '' };
     case 'workout': {
       const rest = s.restUntil - now;
       return rest > 0
@@ -122,9 +117,7 @@ export function dashboard(s: DashState, now: number): Dash {
         ? { big: `${Math.ceil(left / 60_000)}분`, caption: `${formatClock(new Date(s.meetingEnd!))}까지`, detail: `회의 경과 ${formatDuration(elapsed)}` }
         : { big: formatDuration(elapsed), caption: '회의 경과', detail: '' };
     }
-    case 'assistant': {
-      const d = new Date(now);
-      return { big: formatClock(d), caption: `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEKDAYS[d.getDay()]})`, detail: '' };
-    }
+    case 'assistant':
+      return null;
   }
 }

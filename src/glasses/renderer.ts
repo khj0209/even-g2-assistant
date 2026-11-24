@@ -51,6 +51,12 @@ export class Renderer {
     }
   }
 
+  /** Rebuild the page and redraw everything, e.g. after another screen had the glasses. */
+  relayout(): void {
+    this.layout = null;
+    this.redraw();
+  }
+
   /** Forget what was sent and push everything again (e.g. after the glasses page was rebuilt). */
   redraw(): void {
     this.sent.clear();

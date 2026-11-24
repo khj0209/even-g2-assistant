@@ -1,3 +1,4 @@
+[hidden] { display: none !important; }
 :root {
   color-scheme: dark;
   --bg: #0b0f0c;
@@ -77,3 +78,15 @@ details.setting > summary { cursor: pointer; font-weight: 600; list-style: none;
 details.setting > summary::after { content: '›'; color: var(--dim); transition: transform .15s; }
 details.setting[open] > summary::after { transform: rotate(90deg); }
 details.setting[open] > summary { margin-bottom: 8px; }
+
+/* Drive HUD controls */
+#drive-mirror { width: 100%; aspect-ratio: 2 / 1; display: block; background: #000; border-radius: 10px; margin: 10px 0; }
+.pill.on { background: #153d22; color: var(--accent); }
+.results { list-style: none; padding: 0; margin: 6px 0; }
+.results li { display: flex; gap: 6px; margin: 4px 0; }
+.results li .place { flex: 1; text-align: left; }
+.results li .small { padding: 6px 10px; }
+.favorites .fav { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 6px 0; }
+.favorites .buttons { margin: 0; }
+label.check { display: flex; align-items: center; gap: 8px; color: var(--text); }
+label.check input { width: auto; margin: 0; }

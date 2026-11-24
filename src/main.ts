@@ -8,6 +8,9 @@ import { maskKey } from './platform/secrets';
 import { browserKV, evenKV } from './platform/storage';
 import { describeError } from './services/claude';
 import { PreviewSink } from './glasses/previewSink';
+import { App as DriveApp } from './drive/app';
+import { PreviewSink as DrivePreviewSink } from './drive/hud/preview';
+import { initDriveUi } from './drive/ui';
 import type { AgentSessionInfo } from './services/sessions';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -26,7 +29,12 @@ function say(target: HTMLElement, text: string, error = false): void {
 async function main(): Promise<void> {
   const bridge = await connectBridge();
   const kv = bridge ? evenKV(bridge) : browserKV();
-  const app = new Assistant({ bridge, kv });
+  // The Drive HUD (ported from even-g2-HUD) owns the glasses only while G2 Context says 운전.
+  const drive = new DriveApp(new DrivePreviewSink($<HTMLCanvasElement>('drive-mirror')));
+  initDriveUi(drive);
+  drive.start();
+  if (bridge) await drive.attachBridge(bridge);
+  const app = new Assistant({ bridge, kv, drive });
   app.addSink(new PreviewSink($<HTMLCanvasElement>('mirror')));
   await app.init();
 
@@ -166,6 +174,8 @@ async function main(): Promise<void> {
     }
     ptt.classList.toggle('active', app.stage === 'listening');
     $('now-mode').textContent = MODES[app.mode].label;
+    $('mirror').hidden = app.driving;
+    $('drive-mirror').hidden = !app.driving;
     $('companion-state').textContent = app.companion ? 'G2 Context 연결됨' : `G2 Context 연결 안 됨 — ${app.companionError}`;
     $('key-state').textContent = app.claudeKey
       ? `받음 (${maskKey(app.claudeKey)})`

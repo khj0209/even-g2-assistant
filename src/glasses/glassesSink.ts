@@ -54,6 +54,8 @@ export class GlassesSink implements Sink {
   private images = new Map<number, { box: Box; image: HTMLCanvasElement }>();
   private created = false;
   private pumping = false;
+  /** While another screen (the Drive HUD) owns the glasses, nothing is sent; updates wait for resume. */
+  private paused = false;
   /** Resolves once the startup page exists (the glasses microphone needs it). */
   ready: Promise<boolean>;
   private resolveReady!: (ok: boolean) => void;
@@ -79,15 +81,25 @@ export class GlassesSink implements Sink {
     void this.pump();
   }
 
+  pause(): void {
+    this.paused = true;
+  }
+
+  /** Back in charge: the caller re-lays out the page (Renderer.relayout), which also drops stale queued updates. */
+  resume(): void {
+    this.paused = false;
+  }
+
   exit(): void {
     void this.bridge.shutDownPageContainer(1);
   }
 
   private async pump(): Promise<void> {
-    if (this.pumping) return;
+    if (this.pumping || this.paused) return;
     this.pumping = true;
     try {
       for (;;) {
+        if (this.paused) break;
         if (this.layout) {
           const boxes = this.layout;
           this.layout = null;

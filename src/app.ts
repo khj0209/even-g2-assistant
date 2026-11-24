@@ -32,13 +32,22 @@ const CONTEXT_POLL_MS = 5000;
 const NO_KEY = 'G2 Context 앱에서 Claude API 키를 등록하고, 이 화면 설정에 연결 코드를 넣어 주세요.';
 /** How long the conversation popup stays open after the last answer or message. */
 const ANSWER_HOLD_MS = 20_000;
-const GPS_MODES = new Set<ContextMode>(['running', 'driving']);
+// Driving has the Drive HUD's own location tracking; two users of the same GPS stream would fight.
+const GPS_MODES = new Set<ContextMode>(['running']);
 /** The host may deliver one touch as both a text and a sys event: drop repeats this close together. */
 const DEDUPE_MS = 150;
+
+/** The embedded Drive HUD (src/drive), which owns the glasses while driving. */
+export interface DriveSide {
+  /** `onExit`: the wearer left the HUD (double tap or its "운전 모드 끝내기" menu). */
+  startDriving(onExit: () => void): void;
+  stopDriving(): void;
+}
 
 export interface AppDeps {
   bridge: EvenAppBridge | null;
   kv: KV;
+  drive?: DriveSide;
 }
 
 /** Everything the assistant does, shared by the glasses and the phone screen. */
@@ -61,6 +70,10 @@ export class Assistant {
   companion = false;
   /** Why the last poll failed, for the phone screen. */
   companionError = '';
+  /** The Drive HUD has the glasses. */
+  driving = false;
+  /** The wearer left the HUD; stay out of it until G2 Context stops saying 운전. */
+  private driveSnoozed = false;
   /** The Claude key from G2 Context (needs the pairing code). Memory only. */
   claudeKey: string | undefined;
   /** What's playing on the phone, from the companion (needs the pairing code). */
@@ -154,6 +167,8 @@ export class Assistant {
     this.companion = !!ctx;
     this.companionError = 'error' in r ? r.error : '';
     const next = ctx?.mode ?? 'assistant';
+    if (next !== 'driving') this.driveSnoozed = false;
+    this.syncDrive(next === 'driving' && !this.driveSnoozed);
     this.meetingEnd = ctx?.end;
     // Kept in memory only; it disappears when G2 Context removes it or stops answering.
     if (ctx?.claudeKey !== this.claudeKey) {
@@ -169,6 +184,27 @@ export class Assistant {
     this.sets = 0;
     this.restUntil = 0;
     void this.setGps(GPS_MODES.has(next));
+    this.render();
+  }
+
+  /** Hands the glasses to the Drive HUD and back. No conversation while driving. */
+  private syncDrive(on: boolean): void {
+    const { drive } = this.deps;
+    if (!drive || on === this.driving) return;
+    this.driving = on;
+    if (on) {
+      if (this.stage === 'listening') this.cancelListening();
+      else if (this.stage === 'answering') this.abort?.abort();
+      this.glasses?.pause();
+      drive.startDriving(() => {
+        this.driveSnoozed = true;
+        this.syncDrive(false);
+      });
+    } else {
+      drive.stopDriving();
+      this.glasses?.resume();
+      this.renderer.relayout();
+    }
     this.render();
   }
 
@@ -195,7 +231,7 @@ export class Assistant {
   }
 
   /** The mode's dashboard, the screen under the popup. */
-  private dashboardView(): Dash {
+  private dashboardView(): Dash | null {
     return dashboard(
       { mode: this.mode, since: this.modeSince, track: this.track, sets: this.sets, restUntil: this.restUntil, meetingEnd: this.meetingEnd },
       Date.now(),
@@ -233,6 +269,7 @@ export class Assistant {
   // ---------------------------------------------------------------- glasses input
 
   private onGlassesEvent(e: EvenHubEvent): void {
+    if (this.driving) return; // the Drive HUD handles the glasses' input while it has them
     if (e.audioEvent) {
       this.glassesMic?.feed(e.audioEvent.audioPcm);
       return;
@@ -250,6 +287,7 @@ export class Assistant {
 
   /** Touchpad gestures: hold to talk, tap/scroll to page, double tap to cancel or exit. */
   handleInput(type: OsEventTypeList): void {
+    if (this.driving) return;
     switch (type) {
       case OsEventTypeList.LONG_PRESS_EVENT:
         this.pressed = true;
@@ -451,8 +489,8 @@ export class Assistant {
       }),
       media: mediaLine(this.media, SCREEN.w - 16),
       // Under an open popup nothing is drawn: the glasses add light, so anything behind would show through.
-      hero: popup ? null : { big: dash.big, caption: dash.caption },
-      detail: popup ? '' : dash.detail,
+      hero: popup || !dash ? null : { big: dash.big, caption: dash.caption },
+      detail: popup || !dash ? '' : dash.detail,
       popup: popup ? (this.pages[this.page] ?? '') : null,
     });
     for (const cb of this.listeners) cb();

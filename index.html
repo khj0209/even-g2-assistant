@@ -19,6 +19,8 @@
 
       <!-- 1. What the glasses show right now -->
       <canvas id="mirror" aria-label="안경 화면 미리보기"></canvas>
+      <canvas id="drive-mirror" aria-label="운전 HUD 미리보기" hidden></canvas>
+      <p id="map-status" class="message"></p>
 
       <section class="card now">
         <div class="now-row">
@@ -41,6 +43,90 @@
           <button type="submit">보내기</button>
         </form>
         <p id="notice" class="message"></p>
+      </section>
+
+      <!-- Driving: the Drive HUD (from even-g2-HUD) takes the glasses while G2 Context says 운전 -->
+      <section class="card" id="drive-panel">
+        <div class="now-row">
+          <span class="label">운전</span>
+          <strong>Drive HUD</strong>
+          <span id="pill-gps" class="pill">GPS</span>
+        </div>
+        <p class="note">
+          G2 Context가 운전을 감지하면 안경이 속도·제한속도·단속 카메라·길 안내·미니맵 화면으로 바뀝니다. 두 번 탭하거나 안경 메뉴
+          "운전 모드 끝내기"로 나오면, 운전이 끝날 때까지 다시 들어가지 않습니다.
+        </p>
+        <p id="bg-report" class="message"></p>
+        <details open>
+          <summary>길 안내</summary>
+          <form id="search-form" class="row-form">
+            <input id="search-input" type="search" placeholder="목적지 검색" autocomplete="off" enterkeyhint="search" />
+            <button type="submit">검색</button>
+          </form>
+          <ul id="results" class="results"></ul>
+          <div id="nav-active" class="now-row" hidden>
+            <span id="nav-dest"></span>
+            <button id="nav-stop" type="button" class="danger">안내 종료</button>
+          </div>
+          <p id="nav-message" class="message"></p>
+          <div class="favorites">
+            <div class="fav">
+              <span>집 <small id="home-name" class="dim">미등록</small></span>
+              <span class="buttons"><button id="home-go" type="button">안내</button><button id="home-clear" type="button" class="danger">지우기</button></span>
+            </div>
+            <div class="fav">
+              <span>회사 <small id="work-name" class="dim">미등록</small></span>
+              <span class="buttons"><button id="work-go" type="button">안내</button><button id="work-clear" type="button" class="danger">지우기</button></span>
+            </div>
+          </div>
+          <p class="note">검색 결과의 "집"·"회사"로 등록합니다. 운전 화면의 안경 메뉴 "집으로"·"회사로"·"안내 종료"로 휴대폰 없이 안내를 시작하거나 끝냅니다.</p>
+        </details>
+        <details>
+          <summary>주행 기록</summary>
+          <p id="trip-current" class="message"></p>
+          <ul id="trip-list" class="transcript"></ul>
+          <div class="buttons"><button id="trip-clear" type="button" class="danger">기록 지우기</button></div>
+        </details>
+        <details>
+          <summary>지도 저장</summary>
+          <p class="note">지나간 곳의 지도는 이 휴대폰에 저장되고, 길 안내를 시작하면 경로 전체를 미리 받습니다.</p>
+          <div class="buttons">
+            <button id="map-prefetch" type="button">주변 3 km 받기</button>
+            <button id="map-clear" type="button" class="danger">저장된 지도 지우기</button>
+          </div>
+        </details>
+        <details>
+          <summary>운전 설정</summary>
+          <label>Tmap API 키 (없으면 OSRM으로 경로 계산)
+            <input id="set-tmap-key" type="password" autocomplete="off" spellcheck="false" />
+          </label>
+          <label>야간 밝기
+            <select id="set-night">
+              <option value="auto">자동 (해 지면 어둡게)</option>
+              <option value="day">항상 밝게</option>
+              <option value="night">항상 어둡게</option>
+            </select>
+          </label>
+          <label>속도 단위
+            <select id="set-unit"><option value="kmh">km/h</option><option value="mph">mph</option></select>
+          </label>
+          <label>과속 경고 기준
+            <select id="set-tolerance">
+              <option value="0">제한속도 초과 즉시</option>
+              <option value="5">+5 km/h</option>
+              <option value="10">+10 km/h</option>
+            </select>
+          </label>
+          <label class="check"><input id="set-camera" type="checkbox" /> 단속 카메라 알림</label>
+          <label class="check"><input id="set-demo" type="checkbox" /> 데모 주행 (GPS 없이 테스트)</label>
+          <label class="check"><input id="set-drowsy" type="checkbox" /> 졸음 감지 (실험)</label>
+          <p id="drowsy-status" class="message"></p>
+          <div class="buttons"><button id="drowsy-calibrate" type="button">졸음 감지 보정</button></div>
+          <p class="note">
+            보정: 차를 세우고 정면을 본 채 누른 뒤 4초 안에 고개를 두 번 끄덕이세요. 제한속도·단속 카메라는 OpenStreetMap 기준이라
+            실제와 다를 수 있으니 항상 도로 표지판을 우선하고, 주행 중에는 휴대폰을 조작하지 마세요.
+          </p>
+        </details>
       </section>
 
       <!-- 3. Conversations -->
