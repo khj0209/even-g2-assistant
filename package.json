@@ -1,6 +1,6 @@
 {
   "name": "even-g2-assistant",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "private": true,
   "type": "module",
   "description": "AI assistant (pixel baby bear + Claude) for Even Realities G2 glasses",
