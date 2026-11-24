@@ -59,6 +59,12 @@ fun pairingCode(ctx: Context): String {
     return code
 }
 
+/** A query parameter of a request target like "/st/status?id=abc&key=X", URL-decoded. */
+fun queryParam(target: String, name: String): String? =
+    target.substringAfter('?', "").split('&').firstOrNull { it.startsWith("$name=") }
+        ?.removePrefix("$name=")
+        ?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+
 /** Checks `key=` in a request target like "/mode?key=ABCD2345", in constant time. */
 fun hasPairingKey(target: String, code: String): Boolean {
     val key = target.substringAfter('?', "").split('&').firstOrNull { it.startsWith("key=") }?.removePrefix("key=") ?: return false

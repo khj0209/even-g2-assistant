@@ -31,6 +31,7 @@ import {
 import { GlassesMicRecognizer, SttUnavailableError } from './services/stt';
 import { DEFAULT_LOCATION, fetchTodayRange, type GeoPoint } from './services/weather';
 import { fetchContext, transcribe } from './services/context';
+import { smartThingsTools } from './services/smartthings';
 import { fetchLyrics, lineAt, searchTerms, type LyricLine } from './services/lyrics';
 import { ellipsize } from './core/textlayout';
 
@@ -93,6 +94,8 @@ export class Assistant {
   nextEvent: { title: string; start: number } | undefined;
   /** Samsung Health values from G2 Context. */
   health: Health | undefined;
+  /** SmartThings is signed in on G2 Context, so Claude gets the device tools. */
+  smartThings = false;
   private remindedKey = '';
   /** Running: last whole kilometre announced, and when it was reached. */
   private splitKm = 0;
@@ -222,6 +225,7 @@ export class Assistant {
     this.meetingEnd = ctx?.end;
     this.nextEvent = ctx?.next;
     this.health = ctx?.health;
+    this.smartThings = !!ctx?.smartthings;
     // Kept in memory only; it disappears when G2 Context removes it or stops answering.
     if (ctx?.claudeKey !== this.claudeKey) {
       const hadKey = !!this.claudeKey;
@@ -601,7 +605,8 @@ export class Assistant {
         let s = this.sessions.current()!;
         s = appendTurn(s, { role: 'user', text: q });
         await this.sessions.update(s);
-        const r = await askClaude(client, this.settings.model, s.turns, onText, this.abort.signal, MODES[this.mode].hint);
+        const tools = this.smartThings ? smartThingsTools(this.settings.companionKey) : [];
+        const r = await askClaude(client, this.settings.model, s.turns, onText, this.abort.signal, MODES[this.mode].hint, tools);
         this.usage = addUsage(this.usage, r.usage, new Date());
         void this.deps.kv.set('usage', JSON.stringify(this.usage));
         this.answer = r.refused ? '그 요청에는 답할 수 없어요.' : r.text || '(빈 응답)';

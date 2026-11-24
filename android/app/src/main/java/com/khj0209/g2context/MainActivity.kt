@@ -18,6 +18,10 @@ import android.text.InputType
 import android.view.Gravity
 import android.view.View
 import android.view.WindowInsets
+import android.app.Dialog
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
@@ -45,6 +49,9 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
     private lateinit var carState: TextView
     private lateinit var healthState: TextView
     private lateinit var healthButton: Button
+    private lateinit var stState: TextView
+    /** The `state` of the SmartThings sign-in in progress, checked when it comes back. */
+    private var stLoginState: String? = null
     private val modeButtons = mutableMapOf<Mode?, Button>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -147,6 +154,50 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
             ),
         )
 
+        stState = text("", 15f)
+        val stClient = input("Client ID", prefs(this).getString(KEY_ST_CLIENT, "") ?: "")
+        val stSecret = input("Client Secret", "", password = true)
+        val stRedirectInput = input("Redirect URI", stRedirect(this))
+        val stPaste = input("브라우저 로그인 후 주소창의 주소 붙여넣기", "")
+        val saveAndLogin = button("저장하고 로그인", PRIMARY) {
+            val id = stClient.text.toString().trim()
+            val sec = stSecret.text.toString().trim()
+            if (id.isEmpty() || (sec.isEmpty() && secretMissing())) {
+                stState.text = "Client ID와 Client Secret을 넣어 주세요"
+                return@button
+            }
+            stSaveClient(this, id, sec.ifEmpty { currentSecret() }, stRedirectInput.text.toString().trim().ifEmpty { ST_DEFAULT_REDIRECT })
+            stSecret.text.clear()
+            stLogin()
+        }
+        val inBrowser = button("브라우저로 로그인", NORMAL) {
+            stLoginState = java.util.UUID.randomUUID().toString()
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(stAuthorizeUrl(this, stLoginState!!))))
+        }
+        val usePasted = button("붙여넣은 주소로 연결", NORMAL) { finishStLogin(stPaste.text.toString().trim()) }
+        val disconnect = button("연결 해제", DANGER) {
+            stDisconnect(this)
+            update()
+        }
+        root.addView(
+            card(
+                "SmartThings",
+                stState,
+                stClient.spaced(),
+                stSecret.spaced(),
+                stRedirectInput.spaced(),
+                saveAndLogin,
+                row(inBrowser, disconnect),
+                stPaste.spaced(),
+                usePasted,
+                note(
+                    "한 번만: PC에서 SmartThings CLI로 `smartthings apps:create` → OAuth-In App을 만들고, Redirect URI에 위 주소를, " +
+                        "권한에 기기·장면 읽기/실행을 넣어 받은 Client ID·Secret을 입력하세요. 로그인 화면이 앱 안에서 안 열리면 " +
+                        "'브라우저로 로그인' 뒤 마지막 주소를 붙여넣으세요.",
+                ),
+            ),
+        )
+
         diagnostics = text("", 12f, color = DIM).apply { setPadding(0, dp(12), 0, 0) }
         root.addView(card("도움말", note(HELP.trim()), diagnostics))
 
@@ -218,6 +269,8 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
             else -> "● 연결됨"
         }
         healthState.setTextColor(if (healthGranted(this)) ACCENT else DIM)
+        stState.text = if (stConnected(this)) "● 연결됨 — 안경에서 \"거실 불 꺼\"처럼 말해 보세요" else "○ 연결 안 됨"
+        stState.setTextColor(if (stConnected(this)) ACCENT else DIM)
         // Health Connect allows reads while this screen is open, so refresh the glasses' values now.
         if (healthGranted(this)) Thread { health(this) }.start()
 
@@ -231,7 +284,71 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
         }
     }
 
+    // ---------------------------------------------------------------- SmartThings sign-in
+
+    private fun currentSecret() = secret(this, KEY_ST_SECRET) ?: ""
+
+    private fun secretMissing() = secret(this, KEY_ST_SECRET) == null
+
+    /** Signs in inside the app and catches the redirect before it loads, so any https redirect URI works. */
+    private fun stLogin() {
+        val state = java.util.UUID.randomUUID().toString()
+        stLoginState = state
+        val dialog = Dialog(this, android.R.style.Theme_Material_NoActionBar)
+        val web = WebView(this).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                    val url = request.url.toString()
+                    if (!url.startsWith(stRedirect(this@MainActivity))) return false
+                    dialog.dismiss()
+                    finishStLogin(url)
+                    return true
+                }
+            }
+        }
+        dialog.setContentView(web)
+        dialog.show()
+        web.loadUrl(stAuthorizeUrl(this, state))
+    }
+
+    private fun finishStLogin(url: String) {
+        val uri = Uri.parse(url)
+        val code = uri.getQueryParameter("code")
+        if (code == null || uri.getQueryParameter("state") != stLoginState) {
+            stState.text = "로그인 실패: 돌아온 주소가 올바르지 않아요 (로그인을 다시 시작해 주세요)"
+            return
+        }
+        stLoginState = null
+        stState.text = "연결 중…"
+        Thread {
+            val error = try {
+                stExchange(this, code)
+                null
+            } catch (e: Exception) {
+                e.message ?: "알 수 없는 오류"
+            }
+            runOnUiThread {
+                update()
+                if (error != null) stState.text = "로그인 실패: $error"
+            }
+        }.start()
+    }
+
     // ---------------------------------------------------------------- look
+
+    private fun input(hint: String, value: String, password: Boolean = false) = EditText(this).apply {
+        this.hint = hint
+        setText(value)
+        inputType = InputType.TYPE_CLASS_TEXT or (if (password) InputType.TYPE_TEXT_VARIATION_PASSWORD else InputType.TYPE_TEXT_VARIATION_URI)
+        isSingleLine = true
+        setTextColor(TEXT)
+        setHintTextColor(DIM)
+        background = rounded(INPUT, LINE, dp(12).toFloat())
+        setPadding(dp(14), dp(12), dp(14), dp(12))
+    }
+
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 

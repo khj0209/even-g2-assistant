@@ -60,3 +60,12 @@ class ClaudeKeyTest {
         assertEquals("sk-ant-…wxyz", maskClaudeKey("sk-ant-api03-ABCDEFGHIJKLMNOPwxyz"))
     }
 }
+
+class QueryTest {
+    @Test
+    fun readsParams() {
+        assertEquals("abc-1", queryParam("/st/status?id=abc-1&key=K", "id"))
+        assertEquals("거실 조명", queryParam("/x?q=%EA%B1%B0%EC%8B%A4%20%EC%A1%B0%EB%AA%85", "q"))
+        assertEquals(null, queryParam("/st/status?key=K", "id"))
+    }
+}

@@ -10,7 +10,7 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-// The Claude API key is kept here, encrypted with an AES key that never leaves the Android Keystore.
+// The Claude API key (and SmartThings' credentials) are kept here, encrypted with an AES key that never leaves the Android Keystore.
 // The glasses app gets it only over the paired loopback connection and keeps it in memory.
 
 private const val ALIAS = "claude-key"
@@ -34,19 +34,20 @@ fun looksLikeClaudeKey(key: String) = Regex("^sk-ant-[A-Za-z0-9_-]{20,}$").match
 /** "sk-ant-api03-…wxyz" style, never the whole key. */
 fun maskClaudeKey(key: String) = "sk-ant-…${key.takeLast(4)}"
 
-fun saveClaudeKey(ctx: Context, key: String?) {
-    if (key == null) {
-        prefs(ctx).edit().remove(KEY_CLAUDE).apply()
+/** Stores a secret encrypted with the keystore key under `name` in prefs; null removes it. */
+fun saveSecret(ctx: Context, name: String, value: String?) {
+    if (value == null) {
+        prefs(ctx).edit().remove(name).apply()
         return
     }
     val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, aesKey()) }
-    val ct = cipher.doFinal(key.toByteArray())
+    val ct = cipher.doFinal(value.toByteArray())
     val b64 = { b: ByteArray -> Base64.encodeToString(b, Base64.NO_WRAP) }
-    prefs(ctx).edit().putString(KEY_CLAUDE, "${b64(cipher.iv)}.${b64(ct)}").apply()
+    prefs(ctx).edit().putString(name, "${b64(cipher.iv)}.${b64(ct)}").apply()
 }
 
-fun claudeKey(ctx: Context): String? {
-    val stored = prefs(ctx).getString(KEY_CLAUDE, null) ?: return null
+fun secret(ctx: Context, name: String): String? {
+    val stored = prefs(ctx).getString(name, null) ?: return null
     return try {
         val (iv, ct) = stored.split('.').map { Base64.decode(it, Base64.NO_WRAP) }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.DECRYPT_MODE, aesKey(), GCMParameterSpec(128, iv)) }
@@ -55,3 +56,7 @@ fun claudeKey(ctx: Context): String? {
         null // keystore key lost (e.g. app data restored elsewhere): the user enters it again
     }
 }
+
+fun saveClaudeKey(ctx: Context, key: String?) = saveSecret(ctx, KEY_CLAUDE, key)
+
+fun claudeKey(ctx: Context): String? = secret(ctx, KEY_CLAUDE)

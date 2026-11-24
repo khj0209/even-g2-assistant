@@ -167,6 +167,14 @@ class ContextService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             request.startsWith("OPTIONS ") -> "204 No Content" to null
             request.startsWith("GET /mode") -> "200 OK" to modeJson(paired)
             request.startsWith("POST /stt") -> stt(input, length, paired)
+            request.startsWith("GET /st/devices") -> smartThings(paired) { stDevices(this) }
+            request.startsWith("GET /st/status") -> smartThings(paired) { stStatus(this, queryParam(target, "id") ?: "") }
+            request.startsWith("POST /st/command") -> smartThings(paired) {
+                if (length !in 1..65_536) throw IOException("요청이 너무 커요")
+                val body = ByteArray(length)
+                DataInputStream(input).readFully(body)
+                stCommand(this, JSONObject(String(body)))
+            }
             else -> "404 Not Found" to null
         }
         val body = json?.toString()?.toByteArray() ?: ByteArray(0)
@@ -190,6 +198,7 @@ class ContextService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         if (paired) {
             currentMedia(this)?.let { json.put("media", it) }
             claudeKey(this)?.let { json.put("claudeKey", it) }
+            if (stConnected(this)) json.put("smartthings", true)
             nextEvent(this)?.let { (title, start) -> json.put("next", JSONObject().put("title", title).put("start", start)) }
             health(this)?.let { json.put("health", it) }
         }
@@ -205,6 +214,16 @@ class ContextService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             "200 OK" to JSONObject().put("text", transcribe(this, pcm))
         } catch (e: IOException) {
             "503 Service Unavailable" to JSONObject().put("error", e.message)
+        }
+    }
+
+    /** SmartThings calls for the glasses app: paired requests only, errors passed on as {"error"}. */
+    private fun smartThings(paired: Boolean, call: () -> JSONObject): Pair<String, JSONObject> {
+        if (!paired) return "403 Forbidden" to JSONObject().put("error", "연결 코드가 G2 Context와 달라요")
+        return try {
+            "200 OK" to call()
+        } catch (e: Exception) {
+            "502 Bad Gateway" to JSONObject().put("error", e.message ?: "SmartThings 오류")
         }
     }
 

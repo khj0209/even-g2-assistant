@@ -52,6 +52,8 @@ export interface Context {
   next?: { title: string; start: number };
   /** Samsung Health via Health Connect; only sent with the pairing code. */
   health?: Health;
+  /** SmartThings is signed in on G2 Context (paired requests only). */
+  smartthings?: boolean;
 }
 
 /** Today's steps, last night's sleep (minutes) and the latest heart rate with its time (ms). */
@@ -75,6 +77,7 @@ export function parseContext(json: unknown): Context | null {
     claudeKey?: unknown;
     next?: { title?: unknown; start?: unknown };
     health?: Record<string, unknown>;
+    smartthings?: unknown;
   } | null;
   if (!j || !isMode(j.mode)) return null;
   const m = j.media;
@@ -86,6 +89,7 @@ export function parseContext(json: unknown): Context | null {
     ...(title ? { media: { title, artist: str(m!.artist), app: str(m!.app), pos: num(m!.pos), dur: num(m!.dur) } } : {}),
     ...(typeof j.claudeKey === 'string' && looksLikeAnthropicKey(j.claudeKey) ? { claudeKey: j.claudeKey.trim() } : {}),
     ...(str(j.next?.title) && num(j.next?.start) != null ? { next: { title: str(j.next!.title)!, start: num(j.next!.start)! } } : {}),
+    ...(j.smartthings === true ? { smartthings: true } : {}),
     ...(j.health && typeof j.health === 'object'
       ? { health: { steps: num(j.health.steps), sleepMin: num(j.health.sleepMin), hr: num(j.health.hr), hrAt: num(j.health.hrAt) } }
       : {}),

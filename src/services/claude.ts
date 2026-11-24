@@ -14,6 +14,7 @@ export const SYSTEM_PROMPT = `너는 ${PET_NAME}, Even Realities G2 스마트 �
 - 숫자와 핵심을 먼저 말하고 군더더기 인사말은 생략해.
 - 음성 인식 결과라 오타나 잘못 들린 단어가 있을 수 있으니 문맥으로 이해해. 정말 알 수 없으면 짧게 되물어.
 - 경기 결과, 뉴스, 가격, 영업시간처럼 최신 정보가 필요한 질문은 웹 검색으로 확인하고 답해. 출처는 말하지 않아도 돼.
+- 집 기기 제어 도구(SmartThings)가 있으면, 기기 목록에서 사용자가 말한 기기를 찾아 제어하고 결과를 한 문장으로 알려줘. 어떤 기기인지 애매하면 짧게 되물어.
 - 가끔 아기곰다운 귀여운 말투를 살짝 섞어도 되지만 정보 전달이 우선이야.`;
 
 /** Models that accept the server-side refusal fallback (`fallbacks: "default"`). */
@@ -36,6 +37,16 @@ export interface AskResult {
   refused: boolean;
 }
 
+/** A tool the app runs itself (e.g. SmartThings), offered to Claude alongside web search. */
+export interface ClientTool {
+  def: Anthropic.Beta.BetaTool;
+  /** Returns the text sent back to Claude; throws (with a message for Claude) on bad input or failure. */
+  run(input: unknown): Promise<string>;
+}
+
+/** Most tool rounds per answer, so a confused loop can't run up the bill. */
+const MAX_ROUNDS = 6;
+
 export async function askClaude(
   client: Anthropic,
   model: string,
@@ -44,41 +55,72 @@ export async function askClaude(
   signal?: AbortSignal,
   /** Situation-specific instruction; kept after the cached prompt so the cache still hits. */
   modeHint = '',
+  tools: ClientTool[] = [],
 ): Promise<AskResult> {
   const messages: Anthropic.Beta.BetaMessageParam[] = history.map((t) => ({ role: t.role, content: t.text }));
-  const stream = client.beta.messages.stream(
-    {
-      model,
-      max_tokens: 8000,
-      system: [
-        { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
-        ...(modeHint ? [{ type: 'text' as const, text: modeHint }] : []),
-      ],
-      messages,
-      // Claude's built-in web search for recent facts (scores, news, prices). A few searches per answer at most.
-      // shortcut: a 'pause_turn' after a long search loop is shown as-is; resume it if that ever happens in practice.
-      tools: [
-        {
-          type: 'web_search_20260209',
-          name: 'web_search',
-          max_uses: 3,
-          user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' },
-        },
-      ],
-      // Short spoken answers: low effort keeps the wait on the glasses short.
-      output_config: { effort: 'low' },
-      ...(FALLBACK_MODELS.has(model) ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
-    },
-    { signal },
-  );
-  stream.on('text', (delta) => onText(delta));
-  const msg = await stream.finalMessage();
-  const text = msg.content
-    .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text')
-    .map((b) => b.text)
-    .join('')
-    .trim();
-  return { text, usage: msg.usage, refused: msg.stop_reason === 'refusal' };
+  const usage = { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
+  let text = '';
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    const stream = client.beta.messages.stream(
+      {
+        model,
+        max_tokens: 8000,
+        system: [
+          { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
+          ...(modeHint ? [{ type: 'text' as const, text: modeHint }] : []),
+        ],
+        messages,
+        tools: [
+          // Claude's built-in web search for recent facts (scores, news, prices). A few searches per answer at most.
+          {
+            type: 'web_search_20260209',
+            name: 'web_search',
+            max_uses: 3,
+            user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' },
+          },
+          ...tools.map((t) => t.def),
+        ],
+        // Short spoken answers: low effort keeps the wait on the glasses short.
+        output_config: { effort: 'low' },
+        ...(FALLBACK_MODELS.has(model) ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
+      },
+      { signal },
+    );
+    stream.on('text', (delta) => onText(delta));
+    const msg = await stream.finalMessage();
+    usage.input_tokens += msg.usage.input_tokens ?? 0;
+    usage.output_tokens += msg.usage.output_tokens ?? 0;
+    usage.cache_creation_input_tokens += msg.usage.cache_creation_input_tokens ?? 0;
+    usage.cache_read_input_tokens += msg.usage.cache_read_input_tokens ?? 0;
+    text += msg.content
+      .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join('');
+    if (msg.stop_reason === 'refusal') return { text: text.trim(), usage, refused: true };
+    // The whole content goes back unchanged (thinking blocks included), as the API requires for tool turns.
+    if (msg.stop_reason === 'pause_turn') {
+      // A long server-side search paused: send the turn back as-is and let it continue.
+      messages.push({ role: 'assistant', content: msg.content });
+      continue;
+    }
+    if (msg.stop_reason !== 'tool_use') break;
+    messages.push({ role: 'assistant', content: msg.content });
+    const calls = msg.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use');
+    const results = await Promise.all(
+      calls.map(async (call): Promise<Anthropic.Beta.BetaToolResultBlockParam> => {
+        const tool = tools.find((t) => t.def.name === call.name);
+        try {
+          if (!tool) throw new Error(`없는 도구: ${call.name}`);
+          return { type: 'tool_result', tool_use_id: call.id, content: await tool.run(call.input) };
+        } catch (e) {
+          return { type: 'tool_result', tool_use_id: call.id, content: e instanceof Error ? e.message : String(e), is_error: true };
+        }
+      }),
+    );
+    // All results of one turn go back in a single user message.
+    messages.push({ role: 'user', content: results });
+  }
+  return { text: text.trim(), usage, refused: false };
 }
 
 /** Checks a key with a cheap authenticated call. */

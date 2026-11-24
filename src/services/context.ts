@@ -39,6 +39,19 @@ export async function fetchContext(key = ''): Promise<ContextResult> {
   return { error: errors.join(' / ') };
 }
 
+/** A paired JSON call to G2 Context (SmartThings etc.); throws with G2 Context's error message. */
+export async function companionJson(path: string, key: string, body?: unknown): Promise<unknown> {
+  const sep = path.includes('?') ? '&' : '?';
+  const res = await fetch(`${base}${path}${sep}key=${encodeURIComponent(key)}`, {
+    method: body === undefined ? 'GET' : 'POST',
+    ...(body === undefined ? {} : { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const j = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) throw new Error(j.error ?? `G2 Context 요청 실패 (HTTP ${res.status})`);
+  return j;
+}
+
 /** Speech to text by the phone's own recognizer, via G2 Context. `pcm`: 16 kHz 16-bit mono from the glasses. */
 export async function transcribe(pcm: Uint8Array, key: string): Promise<string> {
   const res = await fetch(withKey(`${base}/stt`, key), {

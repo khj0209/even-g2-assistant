@@ -110,6 +110,15 @@ HUD 가운데 줄은 길 안내 중에만 도로·남은 거리·도착 시각�
 - **에이전트 알림**: 30초마다 Claude 에이전트(Managed Agents) 세션을 확인해, 작업이 끝나거나 승인을 기다리면 대화창으로 알립니다.
 - **삼성헬스**: 삼성헬스가 Health Connect로 공유하는 오늘 걸음 수·어젯밤 수면·최근 심박을 G2 Context가 읽어(안드로이드 14+, 연결 코드 필요)
   일상 화면 아래 줄과 러닝·운동 화면에 보여줍니다. 워치의 연속 심박은 몇 분씩 늦게 들어올 수 있습니다.
+- **SmartThings**: 안경에서 "거실 불 꺼", "에어컨 24도로" 처럼 말하면 Claude가 SmartThings 기기·장면을 제어합니다(G2 Context에서 로그인, 연결 코드 필요).
+  SmartThings 개인 토큰은 24시간마다 만료돼서, 한 번만 OAuth 앱을 등록해 자동 갱신 로그인을 씁니다:
+  1. PC(또는 Termux)에서 `npx @smartthings/cli apps:create` → **OAuth-In App** 선택 → 이름 `G2 Context` →
+     권한(scope)에서 `r:devices:*`, `x:devices:*`, `r:scenes:*`, `x:scenes:*`, `r:locations:*` 선택 →
+     Redirect URI에 `https://localhost/g2context` 입력 → 출력되는 **OAuth Client Id / Client Secret** 복사
+  2. G2 Context → SmartThings 카드에 Client ID·Secret을 넣고 **저장하고 로그인** → 삼성 계정 로그인 → "연결됨"
+  3. 앱 안 로그인 화면이 막히면 **브라우저로 로그인** → 로그인 뒤 열리지 않는 `https://localhost/g2context?code=…` 주소를
+     복사해 붙여넣고 **붙여넣은 주소로 연결**
+  - Secret과 토큰은 Android 키 저장소로 암호화해 G2 Context에만 두고, 안경 앱은 기기 목록·명령만 G2 Context를 거쳐 보냅니다.
 - **가사**: 따라 부르기 쉽게 다음 줄을 0.1초 먼저 띄우고, 줄이 바뀌는 순간에 맞춰 화면을 갱신합니다.
 
 ## 보안
