@@ -103,7 +103,11 @@ fun ntfyTopic(ctx: Context): String {
     return topic
 }
 
-/** Claude Code settings for the computer: post to the topic when a task ends or needs the user. */
+/**
+ * Claude Code settings for the computer: post to the topic when a task ends or needs the user.
+ * The text is plain ASCII ("done:", "input:"): Git Bash's curl on Korean Windows sends non-ASCII in the
+ * local code page, which ntfy then treats as a file. [noticeText] turns the codes back into Korean.
+ */
 fun claudeCodeHooks(topic: String): String {
     fun hook(text: String, extra: String) = JSONObject().put(
         "hooks",
@@ -118,11 +122,18 @@ fun claudeCodeHooks(topic: String): String {
         .put(
             "hooks",
             JSONObject()
-                .put("Stop", JSONArray().put(hook("작업 완료", "")))
-                .put("Notification", JSONArray().put(hook("확인 필요", " -H 'Priority: high'"))),
+                .put("Stop", JSONArray().put(hook("done", "")))
+                .put("Notification", JSONArray().put(hook("input", " -H 'Priority: high'"))),
         )
         .toString(2)
         .replace("\\/", "/")
+}
+
+/** "done: my-app" → "작업 완료: my-app", "input: my-app" → "확인 필요: my-app"; anything else as sent. */
+fun noticeText(message: String): String = when {
+    message.startsWith("done:") -> "작업 완료:" + message.removePrefix("done:")
+    message.startsWith("input:") -> "확인 필요:" + message.removePrefix("input:")
+    else -> message
 }
 
 /** Checks `key=` in a request target like "/mode?key=ABCD2345", in constant time. */

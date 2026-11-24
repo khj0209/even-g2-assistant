@@ -113,11 +113,12 @@ class ContextService : Service(), SharedPreferences.OnSharedPreferenceChangeList
                 c.inputStream.bufferedReader().useLines { lines ->
                     for (line in lines) {
                         val m = JSONObject(line)
-                        if (m.optString("event") != "message") continue
+                        // A body ntfy couldn't read as text arrives as a file; there's nothing to show for it.
+                        if (m.optString("event") != "message" || m.has("attachment")) continue
                         MediaListener.latestClaudeNotice = JSONObject()
                             .put("id", "ntfy|${m.optString("id")}")
                             .put("title", m.optString("title", "Claude Code"))
-                            .put("text", m.optString("message"))
+                            .put("text", noticeText(m.optString("message")))
                             .put("at", m.optLong("time") * 1000)
                     }
                 }

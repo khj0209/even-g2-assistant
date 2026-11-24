@@ -76,6 +76,15 @@ class HooksTest {
         val json = org.json.JSONObject(claudeCodeHooks("g2-abc"))
         val stop = json.getJSONObject("hooks").getJSONArray("Stop").getJSONObject(0).getJSONArray("hooks").getJSONObject(0).getString("command")
         assertEquals(true, stop.endsWith("https://ntfy.sh/g2-abc > /dev/null"))
-        assertEquals(true, stop.contains("작업 완료: \$(basename \"\$CLAUDE_PROJECT_DIR\")"))
+        // ASCII only, so Windows' Git Bash curl can't mangle it.
+        assertEquals(true, stop.contains("done: \$(basename \"\$CLAUDE_PROJECT_DIR\")"))
+        assertEquals(true, stop.all { it.code < 128 })
+    }
+
+    @Test
+    fun noticeCodesBecomeKorean() {
+        assertEquals("작업 완료: my-app", noticeText("done: my-app"))
+        assertEquals("확인 필요: my-app", noticeText("input: my-app"))
+        assertEquals("테스트", noticeText("테스트"))
     }
 }
