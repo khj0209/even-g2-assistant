@@ -62,16 +62,14 @@ jobs:
       - name: Test and build
         env:
           VERSION_CODE: ${{ github.run_number }}
-        run: gradle -p android --no-daemon testStandardDebugUnitTest assembleRelease
+        run: gradle -p android --no-daemon testDebugUnitTest assembleRelease
 
-      - run: |
-          cp android/app/build/outputs/apk/standard/release/app-standard-release.apk g2-context.apk
-          cp android/app/build/outputs/apk/full/release/app-full-release.apk g2-context-media.apk
+      - run: cp android/app/build/outputs/apk/release/app-release.apk g2-context.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: g2-context-${{ github.sha }}
-          path: g2-context*.apk
+          path: g2-context.apk
           retention-days: 14
 
       - name: Publish android-latest
@@ -79,6 +77,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete android-latest --cleanup-tag -y 2>/dev/null || true
-          gh release create android-latest g2-context.apk g2-context-media.apk --prerelease --target "$GITHUB_SHA" \
+          gh release create android-latest g2-context.apk --prerelease --target "$GITHUB_SHA" \
             --title "G2 Context (Android) build ${{ github.run_number }}" \
-            --notes "g2-context.apk: 일반 설치용. g2-context-media.apk: 재생 정보 표시 포함 — Play 프로텍트가 브라우저 설치를 막으므로 adb 로 설치하세요 (README 참고). 커밋 ${GITHUB_SHA::7}."
+            --notes "휴대폰에서 g2-context.apk 를 내려받아 설치하세요. 커밋 ${GITHUB_SHA::7}."
