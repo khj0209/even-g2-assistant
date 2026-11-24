@@ -52,6 +52,12 @@
         </activity-alias>
 
         <activity
+            android:name=".ClaudeCodeActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:exported="false"
+            android:label="Claude Code" />
+
+        <activity
             android:name=".SetModeActivity"
             android:excludeFromRecents="true"
             android:exported="true"

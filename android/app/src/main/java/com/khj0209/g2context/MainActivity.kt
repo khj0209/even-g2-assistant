@@ -145,6 +145,16 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
         }
         root.addView(card("차량 블루투스", carState, carOnly.spaced(), note("차 오디오·핸즈프리 블루투스에 연결되면 움직임과 상관없이 운전 모드가 됩니다.")))
 
+        root.addView(
+            card(
+                "Claude Code",
+                text("claude.ai/code의 세션을 이 앱에서 바로 보고 이어서 작업해요.", 15f),
+                button("Claude Code 열기", PRIMARY) { startActivity(Intent(this, ClaudeCodeActivity::class.java)) },
+                button("브라우저로 열기", NORMAL) { ClaudeCodeActivity.openInBrowser(this) }.spaced(),
+                note("Claude 계정으로 한 번 로그인하면 유지돼요. 'Google로 로그인'은 앱 안 화면에서 막히니 이메일로 로그인하거나 브라우저로 여세요."),
+            ),
+        )
+
         healthState = text("", 15f)
         root.addView(
             card(
