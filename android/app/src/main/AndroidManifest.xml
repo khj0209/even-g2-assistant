@@ -20,7 +20,7 @@
     <application
         android:allowBackup="false"
         android:label="G2 Context"
-        android:theme="@android:style/Theme.DeviceDefault.DayNight">
+        android:theme="@android:style/Theme.Material.NoActionBar">
 
         <activity
             android:name=".MainActivity"

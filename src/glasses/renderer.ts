@@ -14,7 +14,7 @@ export interface ScreenView {
   /** Now playing, or '' when nothing plays. */
   media: string;
   /** The mode dashboard's big number and caption, or null to leave that area dark. */
-  hero: { big: string; caption: string } | null;
+  hero: { big: string; caption: string; progress?: number } | null;
   detail: string;
   /** The conversation popup's current page, or null when it is closed. */
   popup: string | null;
@@ -32,7 +32,7 @@ function content(b: Box, v: ScreenView): [string, (() => HTMLCanvasElement)?] {
     case 'popup':
       return [v.popup || ' '];
     case 'hero':
-      return [v.hero ? `${v.hero.big}|${v.hero.caption}` : '', () => paintHero(v.hero)];
+      return [v.hero ? `${v.hero.big}|${v.hero.caption}|${Math.round((v.hero.progress ?? -1) * 100)}` : '', () => paintHero(v.hero)];
   }
 }
 

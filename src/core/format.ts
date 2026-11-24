@@ -44,9 +44,9 @@ export interface StatusParts {
   budget: number;
 }
 
-/** The single top line on the glasses: mode · battery · today's low/high · time · AI tokens left. */
+/** The single top line on the glasses, time first like a watch face: time · mode · battery · low/high · AI left. */
 export function statusLine(p: StatusParts): string {
-  return [`[${p.mode}]`, formatBattery(p.device), formatTemp(p.temp), formatClock(p.now), formatAiTokens(p.used, p.budget)].join('  ');
+  return [formatClock(p.now), p.mode, formatBattery(p.device), formatTemp(p.temp), formatAiTokens(p.used, p.budget)].join('  ·  ');
 }
 
 const mmss = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;

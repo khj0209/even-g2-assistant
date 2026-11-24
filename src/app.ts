@@ -664,7 +664,7 @@ export class Assistant {
       // The popup covers the lyric line, and the glasses would show both through each other.
       media: popup ? mediaLine1 : [mediaLine1, lyric].filter(Boolean).join('\n'),
       // Under an open popup nothing is drawn: the glasses add light, so anything behind would show through.
-      hero: popup || !dash?.big ? null : { big: dash.big, caption: dash.caption },
+      hero: popup || !dash?.big ? null : { big: dash.big, caption: dash.caption, progress: dash.progress },
       detail: popup || !dash ? '' : dash.detail,
       popup: popup ? (this.pages[this.page] ?? '') : null,
     });

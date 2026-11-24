@@ -4,14 +4,20 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
-import android.view.View
 import android.text.InputType
-import android.os.Build
+import android.view.Gravity
+import android.view.View
+import android.view.WindowInsets
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
@@ -23,13 +29,14 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 /**
- * Top to bottom: the current mode, setup steps that are still missing, the pairing code for the
- * glasses app, a grid to fix a mode by hand, then help and diagnostics.
+ * Top to bottom: the current mode, setup steps that are still missing, the Claude key, the pairing
+ * code for the glasses app, a grid to fix a mode by hand, the car, then help and diagnostics.
+ * Same look as the glasses app: near-black glass with the G2's phosphor green as the one accent.
  */
 class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListener {
     private lateinit var modeView: TextView
     private lateinit var reasonView: TextView
-    private lateinit var setupTitle: TextView
+    private lateinit var setupCard: View
     private lateinit var permissionButton: Button
     private lateinit var batteryButton: Button
     private lateinit var mediaButton: Button
@@ -40,37 +47,39 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(28), dp(20), dp(28))
-        }
-        root.addView(text("G2 Context", 14f, dim = true))
-        modeView = text("", 40f).apply { setTypeface(typeface, Typeface.BOLD) }
-        root.addView(modeView)
-        reasonView = text("", 15f, dim = true)
-        root.addView(reasonView)
+        window.decorView.setBackgroundColor(BG)
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
 
-        setupTitle = heading("설정이 필요해요")
-        root.addView(setupTitle)
-        permissionButton = button("마이크 · 움직임 · 캘린더 · 알림 · 블루투스 권한 허용") { requestPermissions(PERMISSIONS, 1) }
-        batteryButton = button("배터리 최적화 제외 (삼성 기기 필수)") {
+        // Current mode, big and glowing like the glasses' readout.
+        root.addView(label("G2 CONTEXT", ACCENT).apply { setPadding(dp(4), 0, 0, dp(10)) })
+        modeView = text("", 44f, color = ACCENT).apply {
+            setTypeface(typeface, Typeface.BOLD)
+            setShadowLayer(dp(14).toFloat(), 0f, 0f, GLOW)
+        }
+        reasonView = text("", 14f, color = DIM)
+        root.addView(card(null, label("지금"), modeView, reasonView, strong = true))
+
+        permissionButton = button("마이크 · 움직임 · 캘린더 · 알림 · 블루투스 권한 허용", PRIMARY) { requestPermissions(PERMISSIONS, 1) }
+        batteryButton = button("배터리 최적화 제외 (삼성 기기 필수)", PRIMARY) {
             startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
         }
-        mediaButton = button("재생 정보 접근 허용 (알림 접근)") {
+        mediaButton = button("재생 정보 접근 허용 (알림 접근)", PRIMARY) {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         }
-        listOf(permissionButton, batteryButton, mediaButton).forEach(root::addView)
+        setupCard = card("설정이 필요해요", permissionButton, batteryButton, mediaButton)
+        root.addView(setupCard)
 
-        root.addView(heading("Claude API 키"))
         keyState = text("", 15f)
-        root.addView(keyState)
         val keyInput = EditText(this).apply {
             hint = "sk-ant-…"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             isSingleLine = true
+            setTextColor(TEXT)
+            setHintTextColor(DIM)
+            background = rounded(INPUT, LINE, dp(12).toFloat())
+            setPadding(dp(14), dp(12), dp(14), dp(12))
         }
-        root.addView(keyInput)
-        root.addView(button("키 저장") {
+        val saveKey = button("저장", PRIMARY) {
             val key = keyInput.text.toString().trim()
             if (!looksLikeClaudeKey(key)) {
                 keyState.text = "Claude API 키는 sk-ant- 로 시작해요"
@@ -79,50 +88,71 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
             saveClaudeKey(this, key)
             keyInput.text.clear()
             update()
-        })
-        root.addView(button("키 삭제") {
+        }
+        val deleteKey = button("삭제", DANGER) {
             saveClaudeKey(this, null)
             update()
-        })
-        root.addView(text("키는 이 휴대폰의 Android 키 저장소로 암호화해 보관하고, 연결 코드를 넣은 안경 앱에만 넘겨줘요.", 13f, dim = true))
+        }
+        root.addView(
+            card(
+                "Claude API 키",
+                keyState,
+                keyInput.spaced(),
+                row(saveKey, deleteKey),
+                note("Android 키 저장소로 암호화해 이 휴대폰에만 보관하고, 연결 코드를 넣은 안경 앱에만 넘겨줘요."),
+            ),
+        )
 
-        root.addView(heading("안경 앱 연결 코드"))
-        root.addView(text(pairingCode(this), 30f).apply {
-            typeface = Typeface.MONOSPACE
-            letterSpacing = 0.15f
+        val code = text(pairingCode(this), 34f, color = ACCENT).apply {
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+            letterSpacing = 0.2f
+            gravity = Gravity.CENTER
             setTextIsSelectable(true)
-        })
-        root.addView(text("Even 앱 → G2 Assistant → 설정 → G2 Context 연결에 입력하면 재생 중인 음악·영상이 안경에 보여요.", 13f, dim = true))
+            background = rounded(INPUT, LINE_STRONG, dp(14).toFloat())
+            setPadding(0, dp(14), 0, dp(14))
+        }
+        root.addView(card("안경 앱 연결 코드", code.spaced(), note("Even 앱 → G2 Assistant → 설정 → G2 Context 연결에 입력하세요.")))
 
-        root.addView(heading("차량 블루투스"))
-        carState = text("", 15f)
-        root.addView(carState)
-        root.addView(CheckBox(this).apply {
-            text = "차량 블루투스에 연결됐을 때만 운전으로 판단 (버스·택시 승객일 때 운전 모드가 켜지지 않게)"
-            isChecked = prefs(this@MainActivity).getBoolean(KEY_CAR_ONLY, false)
-            setOnCheckedChangeListener { _, on -> prefs(this@MainActivity).edit().putBoolean(KEY_CAR_ONLY, on).apply() }
-        })
-        root.addView(text("차 오디오·핸즈프리 블루투스에 연결되면 움직임과 상관없이 운전 모드가 됩니다.", 13f, dim = true))
-
-        root.addView(heading("모드 직접 지정"))
         val grid = GridLayout(this).apply { columnCount = 3 }
         (listOf<Mode?>(null) + Mode.entries).forEach { m ->
-            val b = button(m?.label ?: "자동") { setOverride(m) }
+            val b = button(m?.label ?: "자동", NORMAL) { setOverride(m) }
             b.layoutParams = GridLayout.LayoutParams(GridLayout.spec(GridLayout.UNDEFINED), GridLayout.spec(GridLayout.UNDEFINED, 1f)).apply {
                 width = 0
-                setMargins(dp(3), dp(3), dp(3), dp(3))
+                setMargins(dp(4), dp(4), dp(4), dp(4))
             }
             modeButtons[m] = b
             grid.addView(b)
         }
-        root.addView(grid)
+        root.addView(card("모드 직접 지정", grid, note("'자동'이면 움직임·캘린더·루틴으로 정해져요.")))
 
-        root.addView(heading("도움말"))
-        root.addView(text(HELP.trim(), 14f, dim = true))
-        diagnostics = text("", 12f, dim = true).apply { setPadding(0, dp(16), 0, 0) }
-        root.addView(diagnostics)
+        carState = text("", 15f)
+        val carOnly = CheckBox(this).apply {
+            text = "차량 블루투스에 연결됐을 때만 운전으로 판단 (버스·택시 승객일 때 운전 모드가 켜지지 않게)"
+            setTextColor(TEXT)
+            buttonTintList = ColorStateList.valueOf(ACCENT)
+            isChecked = prefs(this@MainActivity).getBoolean(KEY_CAR_ONLY, false)
+            setOnCheckedChangeListener { _, on -> prefs(this@MainActivity).edit().putBoolean(KEY_CAR_ONLY, on).apply() }
+        }
+        root.addView(card("차량 블루투스", carState, carOnly.spaced(), note("차 오디오·핸즈프리 블루투스에 연결되면 움직임과 상관없이 운전 모드가 됩니다.")))
 
-        setContentView(ScrollView(this).apply { addView(root) })
+        diagnostics = text("", 12f, color = DIM).apply { setPadding(0, dp(12), 0, 0) }
+        root.addView(card("도움말", note(HELP.trim()), diagnostics))
+
+        val scroll = ScrollView(this).apply {
+            addView(root)
+            // Android 15 draws apps edge to edge: keep the content clear of the status and navigation bars.
+            setOnApplyWindowInsetsListener { _, insets ->
+                val (top, bottom) = if (Build.VERSION.SDK_INT >= 30) {
+                    insets.getInsets(WindowInsets.Type.systemBars()).let { it.top to it.bottom }
+                } else {
+                    @Suppress("DEPRECATION")
+                    insets.systemWindowInsetTop to insets.systemWindowInsetBottom
+                }
+                root.setPadding(dp(16), top + dp(18), dp(16), bottom + dp(24))
+                insets
+            }
+        }
+        setContentView(scroll)
         startContextService(this)
     }
 
@@ -153,10 +183,12 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
         val p = prefs(this)
         val mode = Mode.of(p.getString(KEY_CURRENT, null)) ?: Mode.ASSISTANT
         val override = Mode.of(p.getString(KEY_OVERRIDE, null))
-        modeView.text = "${mode.label} 모드"
-        keyState.text = claudeKey(this)?.let { "등록됨 (${maskClaudeKey(it)})" } ?: "미등록 — 아래에 입력하세요"
-        carState.text = if (p.getBoolean(KEY_CAR, false)) "연결됨: ${p.getString(KEY_CAR_NAME, "차량")}" else "연결된 차량 없음"
+        modeView.text = mode.label
         reasonView.text = SOURCE_LABELS[p.getString(KEY_SOURCE, "default")] ?: ""
+        keyState.text = claudeKey(this)?.let { "● 등록됨  ${maskClaudeKey(it)}" } ?: "○ 미등록 — 아래에 입력하세요"
+        keyState.setTextColor(if (claudeKey(this) != null) ACCENT else DIM)
+        carState.text = if (p.getBoolean(KEY_CAR, false)) "● 연결됨  ${p.getString(KEY_CAR_NAME, "차량")}" else "○ 연결된 차량 없음"
+        carState.setTextColor(if (p.getBoolean(KEY_CAR, false)) ACCENT else DIM)
 
         // Setup steps disappear once done.
         val needPermissions = PERMISSIONS.any { !granted(this, it) }
@@ -165,9 +197,9 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
         permissionButton.visibility = if (needPermissions) View.VISIBLE else View.GONE
         batteryButton.visibility = if (needBattery) View.VISIBLE else View.GONE
         mediaButton.visibility = if (needMedia) View.VISIBLE else View.GONE
-        setupTitle.visibility = if (needPermissions || needBattery || needMedia) View.VISIBLE else View.GONE
+        setupCard.visibility = if (needPermissions || needBattery || needMedia) View.VISIBLE else View.GONE
 
-        modeButtons.forEach { (m, b) -> b.isSelected = m == override; b.alpha = if (m == override) 1f else 0.6f }
+        modeButtons.forEach { (m, b) -> style(b, if (m == override) SELECTED else NORMAL) }
 
         val at = p.getLong(KEY_SERVED_AT, 0)
         diagnostics.text = buildString {
@@ -177,26 +209,102 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
         }
     }
 
+    // ---------------------------------------------------------------- look
+
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
-    private fun text(s: String, size: Float, dim: Boolean = false) = TextView(this).apply {
+    private fun rounded(fill: Int, stroke: Int, radius: Float) = GradientDrawable().apply {
+        setColor(fill)
+        cornerRadius = radius
+        if (stroke != 0) setStroke(dp(1), stroke)
+    }
+
+    private fun text(s: String, size: Float, color: Int = TEXT) = TextView(this).apply {
         text = s
         textSize = size
-        if (dim) alpha = 0.7f
+        setTextColor(color)
     }
 
-    private fun heading(s: String) = text(s, 16f).apply {
+    /** Small spaced capitals, like the glasses page's section labels. */
+    private fun label(s: String, color: Int = DIM) = text(s, 11f, color = color).apply {
+        letterSpacing = 0.18f
         setTypeface(typeface, Typeface.BOLD)
-        setPadding(0, dp(24), 0, dp(6))
     }
 
-    private fun button(label: String, onClick: () -> Unit) = Button(this).apply {
+    private fun note(s: String) = text(s, 13f, color = DIM).apply {
+        setPadding(0, dp(8), 0, 0)
+        setLineSpacing(0f, 1.15f)
+    }
+
+    private fun View.spaced(): View = apply {
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(10)
+        }
+    }
+
+    private fun row(vararg views: View) = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        views.forEach { v ->
+            addView(v, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(0, dp(10), dp(8), 0) })
+        }
+    }
+
+    /** A rounded glass panel with an optional section label. */
+    private fun card(title: String?, vararg views: View, strong: Boolean = false) = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = rounded(if (strong) CARD_STRONG else CARD, if (strong) LINE_STRONG else LINE, dp(20).toFloat())
+        setPadding(dp(16), dp(16), dp(16), dp(16))
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = dp(12)
+        }
+        if (title != null) addView(label(title.uppercase(Locale.KOREA)).apply { setPadding(0, 0, 0, dp(8)) })
+        views.forEach { v -> if (v.parent == null) addView(v) }
+    }
+
+    private fun button(label: String, kind: Int, onClick: () -> Unit) = Button(this).apply {
         text = label
         isAllCaps = false
+        textSize = 14f
+        stateListAnimator = null
+        minHeight = dp(46)
+        setPadding(dp(14), dp(10), dp(14), dp(10))
+        style(this, kind)
         setOnClickListener { onClick() }
+        if (kind == PRIMARY) {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = dp(8)
+            }
+        }
+    }
+
+    /** Pill buttons: green filled for the main action and the selected mode, outlined otherwise. */
+    private fun style(b: Button, kind: Int) {
+        val (fill, stroke, textColor) = when (kind) {
+            PRIMARY, SELECTED -> Triple(ACCENT, 0, Color.parseColor("#021A0A"))
+            DANGER -> Triple(Color.parseColor("#1F1213"), Color.parseColor("#5A2A2C"), Color.parseColor("#FF9B9B"))
+            else -> Triple(Color.parseColor("#16211B"), LINE, TEXT)
+        }
+        b.background = RippleDrawable(ColorStateList.valueOf(Color.parseColor("#33FFFFFF")), rounded(fill, stroke, dp(999).toFloat()), null)
+        b.setTextColor(textColor)
+        b.setTypeface(Typeface.DEFAULT, if (kind == PRIMARY || kind == SELECTED) Typeface.BOLD else Typeface.NORMAL)
     }
 
     companion object {
+        private val BG = Color.parseColor("#040605")
+        private val CARD = Color.parseColor("#0F1612")
+        private val CARD_STRONG = Color.parseColor("#0F1C14")
+        private val INPUT = Color.parseColor("#070B09")
+        private val LINE = Color.parseColor("#1D2E24")
+        private val LINE_STRONG = Color.parseColor("#2A5A3A")
+        private val TEXT = Color.parseColor("#E8F2EB")
+        private val DIM = Color.parseColor("#7F9686")
+        private val ACCENT = Color.parseColor("#35F06A")
+        private val GLOW = Color.parseColor("#7735F06A")
+        private const val NORMAL = 0
+        private const val PRIMARY = 1
+        private const val DANGER = 2
+        private const val SELECTED = 3
+
         private val PERMISSIONS = listOfNotNull(
             Manifest.permission.RECORD_AUDIO,
             Manifest.permission.ACTIVITY_RECOGNITION,
@@ -206,7 +314,7 @@ class MainActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListe
             if (Build.VERSION.SDK_INT >= 31) Manifest.permission.BLUETOOTH_CONNECT else null,
         ).toTypedArray()
         private const val HELP = """
-자동 감지: 운전(차량 이동, 항상 우선) · 러닝(달리기) · 운동(자전거) · 회의(캘린더 '바쁨' 일정)
+자동 감지: 운전(차량 이동·차량 블루투스, 항상 우선) · 러닝(달리기) · 운동(자전거) · 회의(캘린더 '바쁨' 일정)
 
 삼성 모드 및 루틴: 루틴의 동작에서 앱 → '앱 열기 또는 앱 작업' → G2 Context → 'G2 개발 모드' 같은 바로가기를 고르면 장소·와이파이·시간으로 모드가 바뀌어요. 반대 조건의 루틴에는 'G2 자동 모드'를 넣으세요.
 """

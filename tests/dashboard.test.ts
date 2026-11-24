@@ -45,7 +45,7 @@ describe('dashboard', () => {
   });
 
   it('cycles focus and break in dev mode', () => {
-    expect(dashboard({ ...base, mode: 'dev' }, 60_000)).toMatchObject({ big: '24:00', caption: '집중 1회차' });
+    expect(dashboard({ ...base, mode: 'dev' }, 60_000)).toMatchObject({ big: '24:00', caption: '집중 1회차', progress: 1 / 25 });
     expect(dashboard({ ...base, mode: 'dev' }, 26 * 60_000)).toMatchObject({ big: '4:00', caption: '쉬는 시간' });
     expect(dashboard({ ...base, mode: 'dev' }, 31 * 60_000)!.caption).toBe('집중 2회차');
   });

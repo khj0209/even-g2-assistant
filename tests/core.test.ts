@@ -86,10 +86,10 @@ describe('format', () => {
       used: 100_000,
       budget: 1_000_000,
     });
-    expect(line).toBe('[운전]  안경 82%  3°/11°  14:07  AI 90%');
+    expect(line).toBe('14:07  ·  운전  ·  안경 82%  ·  3°/11°  ·  AI 90%');
     expect(textWidth(line)).toBeLessThanOrEqual(560);
     const unknown = statusLine({ mode: '일상', device: { connected: false, battery: null, charging: false }, temp: null, now: new Date(2026, 0, 1, 0, 0), used: 0, budget: 0 });
-    expect(unknown).toBe('[일상]  안경 --  --°/--°  00:00  AI 0');
+    expect(unknown).toBe('00:00  ·  일상  ·  안경 --  ·  --°/--°  ·  AI 0');
   });
 });
 

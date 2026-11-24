@@ -94,6 +94,8 @@ async function main(): Promise<void> {
   };
 
   // ------------------------------------------------------------ G2 Context pairing (the mode itself is chosen in that app)
+  // Open until paired; after that the section is just a status line.
+  ($('pair-panel') as HTMLDetailsElement).open = !app.settings.companionKey;
   const companionKey = $<HTMLInputElement>('companion-key');
   companionKey.value = app.settings.companionKey;
   companionKey.onchange = () => void app.saveSettings({ companionKey: companionKey.value.trim().toUpperCase() });
@@ -185,6 +187,7 @@ async function main(): Promise<void> {
     ptt.classList.toggle('active', app.stage === 'listening');
     $('now-mode').textContent = MODES[app.mode].label;
     $('mirror').hidden = app.driving;
+    $('map-status').hidden = !app.driving;
     $('parking-state').textContent = app.parking
       ? `주차 위치 저장됨 (${new Date(app.parking.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}) — 안경에 "차 어디 있어?"`
       : '';

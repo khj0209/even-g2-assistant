@@ -1,7 +1,10 @@
 import { HERO } from './layout';
 
-/** The dashboard's big number with its caption underneath; black (nothing lit) when there is none. */
-export function paintHero(hero: { big: string; caption: string } | null): HTMLCanvasElement {
+/**
+ * The dashboard's big number with a small caption underneath and, for timers, a thin progress bar.
+ * Black (nothing lit) when there is none. Greys come out as dimmer green on the glasses.
+ */
+export function paintHero(hero: { big: string; caption: string; progress?: number } | null): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = HERO.w;
   c.height = HERO.h;
@@ -9,17 +12,39 @@ export function paintHero(hero: { big: string; caption: string } | null): HTMLCa
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, HERO.w, HERO.h);
   if (!hero) return c;
-  ctx.fillStyle = '#fff';
+  const cx = HERO.w / 2;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#fff';
   // Largest size that fits the width, so "1:02:05" and "12" both fill the panel.
-  let size = 84;
-  do ctx.font = `bold ${size}px system-ui, sans-serif`;
-  while (ctx.measureText(hero.big).width > HERO.w - 8 && (size -= 4) > 24);
-  ctx.fillText(hero.big, HERO.w / 2, 80);
-  ctx.fillStyle = '#bbb';
-  ctx.font = 'bold 20px system-ui, sans-serif';
-  ctx.fillText(hero.caption, HERO.w / 2, 106, HERO.w - 8);
+  let size = 80;
+  do ctx.font = `600 ${size}px system-ui, sans-serif`;
+  while (ctx.measureText(hero.big).width > HERO.w - 16 && (size -= 4) > 24);
+  ctx.fillText(hero.big, cx, 70);
+  ctx.fillStyle = '#9a9a9a';
+  ctx.font = '500 17px system-ui, sans-serif';
+  ctx.fillText(hero.caption, cx, 93, HERO.w - 16);
+  if (hero.progress != null) {
+    // A hairline track with the elapsed part bright, like a watch's sub-dial.
+    const w = 180;
+    const x = cx - w / 2;
+    const p = Math.min(1, Math.max(0, hero.progress));
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#3c3c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x, 104);
+    ctx.lineTo(x + w, 104);
+    ctx.stroke();
+    if (p > 0) {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(x, 104);
+      ctx.lineTo(x + w * p, 104);
+      ctx.stroke();
+    }
+  }
   return c;
 }
 

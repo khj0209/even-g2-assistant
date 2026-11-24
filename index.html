@@ -46,12 +46,8 @@
       </section>
 
       <!-- Driving: the Drive HUD (from even-g2-HUD) takes the glasses while G2 Context says 운전 -->
-      <section class="card" id="drive-panel">
-        <div class="now-row">
-          <span class="label">운전</span>
-          <strong>Drive HUD</strong>
-          <span id="pill-gps" class="pill">GPS</span>
-        </div>
+      <details class="card setting" id="drive-panel">
+        <summary>운전 · Drive HUD <span id="pill-gps" class="pill">GPS</span></summary>
         <p class="note">
           G2 Context가 운전을 감지하면 안경이 속도·제한속도·단속 카메라·길 안내·미니맵 화면으로 바뀝니다. 두 번 탭하거나 안경 메뉴
           "운전 모드 끝내기"로 나오면, 운전이 끝날 때까지 다시 들어가지 않습니다.
@@ -128,7 +124,7 @@
             실제와 다를 수 있으니 항상 도로 표지판을 우선하고, 주행 중에는 휴대폰을 조작하지 마세요.
           </p>
         </details>
-      </section>
+      </details>
 
       <!-- 3. Conversations -->
       <section class="card">
@@ -152,7 +148,7 @@
       <!-- 4. Settings, folded away -->
       <h2 class="settings-title">설정</h2>
 
-      <details class="card setting" open>
+      <details class="card setting" id="pair-panel">
         <summary>G2 Context 연결 <span id="key-state" class="dim">확인 중…</span></summary>
         <label>연결 코드 <input id="companion-key" type="text" placeholder="G2 Context 앱에 보이는 8자리" autocomplete="off" autocapitalize="characters" spellcheck="false" /></label>
         <p class="note">

@@ -90,6 +90,8 @@ export interface Dash {
   big: string;
   caption: string;
   detail: string;
+  /** For timers: how much of the current interval has passed, 0..1 (a thin bar under the number). */
+  progress?: number;
 }
 
 /** The glasses' main panel for a mode; null leaves the screen empty (plain assistant). */
@@ -113,7 +115,7 @@ export function dashboard(s: DashState, now: number): Dash | null {
     case 'workout': {
       const rest = s.restUntil - now;
       return rest > 0
-        ? { big: formatDuration(rest), caption: `휴식 · ${s.sets}세트 완료`, detail: `운동 ${formatDuration(elapsed)}` }
+        ? { big: formatDuration(rest), caption: `휴식 · ${s.sets}세트 완료`, detail: `운동 ${formatDuration(elapsed)}`, progress: 1 - rest / REST_MS }
         : { big: `${s.sets}세트`, caption: '탭하면 세트 완료 + 휴식 90초', detail: `운동 ${formatDuration(elapsed)}` };
     }
     case 'dev': {
@@ -125,12 +127,18 @@ export function dashboard(s: DashState, now: number): Dash | null {
         big: formatDuration(focus ? FOCUS_MS - pos : cycle - pos),
         caption: focus ? `집중 ${round}회차` : '쉬는 시간',
         detail: `개발 ${formatDuration(elapsed)}`,
+        progress: focus ? pos / FOCUS_MS : (pos - FOCUS_MS) / BREAK_MS,
       };
     }
     case 'meeting': {
       const left = s.meetingEnd && s.meetingEnd > now ? s.meetingEnd - now : null;
       return left != null
-        ? { big: `${Math.ceil(left / 60_000)}분`, caption: `${formatClock(new Date(s.meetingEnd!))}까지`, detail: `회의 경과 ${formatDuration(elapsed)}` }
+        ? {
+            big: `${Math.ceil(left / 60_000)}분`,
+            caption: `${formatClock(new Date(s.meetingEnd!))}까지`,
+            detail: `회의 경과 ${formatDuration(elapsed)}`,
+            progress: elapsed / (elapsed + left),
+          }
         : { big: formatDuration(elapsed), caption: '회의 경과', detail: '' };
     }
     case 'assistant': {
