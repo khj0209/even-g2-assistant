@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { askClaude, type ClientTool } from '../src/services/claude';
 import { fetchContext } from '../src/services/context';
 import { smartThingsTools } from '../src/services/smartthings';
+import { copDemoTools } from '../src/services/copdemo';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -86,5 +87,25 @@ describe('SmartThings tools', () => {
       'http://127.0.0.1:8765/st/command?key=K',
     ]);
     expect(JSON.parse(st[2].init!.body as string)).toEqual({ deviceId: 'd1', capability: 'switch', command: 'off', arguments: [] });
+  });
+});
+
+describe('CoP demo stock order tool', () => {
+  it('posts the order to the dev-server proxy and returns the demo server answer', async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response('{"ok":true,"order":{"orderId":"ord_1"}}');
+    });
+    const [order] = copDemoTools();
+    const input = { symbol: '005930', name: '삼성전자', side: 'buy', quantity: 10 };
+    expect(await order.run(input)).toContain('ord_1');
+    expect(calls[0].url).toBe('/cop/api/voice-order');
+    expect(JSON.parse(calls[0].init!.body as string)).toEqual(input);
+  });
+
+  it('tells Claude when the laptop is unreachable', async () => {
+    vi.stubGlobal('fetch', async () => { throw new TypeError('Failed to fetch'); });
+    await expect(copDemoTools()[0].run({})).rejects.toThrow('데모 서버에 연결할 수 없어요');
   });
 });

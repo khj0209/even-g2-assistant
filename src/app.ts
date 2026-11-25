@@ -32,6 +32,7 @@ import { GlassesMicRecognizer, SttUnavailableError } from './services/stt';
 import { DEFAULT_LOCATION, fetchTodayRange, type GeoPoint } from './services/weather';
 import { fetchContext, transcribe } from './services/context';
 import { smartThingsTools } from './services/smartthings';
+import { copDemoTools } from './services/copdemo';
 import { fetchLyrics, lineAt, searchTerms, type LyricLine } from './services/lyrics';
 import { ellipsize } from './core/textlayout';
 
@@ -624,7 +625,10 @@ export class Assistant {
         let s = this.sessions.current()!;
         s = appendTurn(s, { role: 'user', text: q });
         await this.sessions.update(s);
-        const tools = this.smartThings ? smartThingsTools(this.settings.companionKey) : [];
+        const tools = [
+          ...(this.smartThings ? smartThingsTools(this.settings.companionKey) : []),
+          ...(import.meta.env.DEV ? copDemoTools() : []),
+        ];
         const r = await askClaude(client, this.settings.model, s.turns, onText, this.abort.signal, MODES[this.mode].hint, tools);
         this.usage = addUsage(this.usage, r.usage, new Date());
         void this.deps.kv.set('usage', JSON.stringify(this.usage));

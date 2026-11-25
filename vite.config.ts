@@ -34,5 +34,10 @@ function csp(): Plugin {
 export default defineConfig({
   base: './',
   plugins: [csp()],
-  server: { port: 5173, strictPort: true },
+  server: {
+    port: 5173,
+    strictPort: true,
+    // CoP demo: the glasses' stock-order tool reaches facilitator-cop/demo-ui on this laptop.
+    proxy: { '/cop': { target: 'http://localhost:4000', rewrite: (p) => p.replace(/^\/cop/, '') } },
+  },
 });
